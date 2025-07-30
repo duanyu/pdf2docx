@@ -74,6 +74,7 @@ class Fonts(BaseCollection):
 
             basename = decode(basename)
             name = cls._normalized_font_name(basename)
+            normalized_font_name = name
 
             try:
                 # supported fonts: open/true type only
@@ -88,6 +89,11 @@ class Fonts(BaseCollection):
             except Exception:
                 line_height = None
 
+            if name == "":
+                # ttfont的逻辑有时有问题，此时用本来norm的结果
+                name = normalized_font_name
+                line_height = None
+            
             fonts.append(Font(
                 descriptor=cls._to_descriptor(name),
                 name=name,
