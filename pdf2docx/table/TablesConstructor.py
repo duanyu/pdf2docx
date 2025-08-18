@@ -18,6 +18,7 @@ Terms definition:
   virtual border adaptive in a certain range, then converted to a stroke once finalized, 
   and finally applied to detect table border.
 '''
+import json
 
 from ..common import constants
 from ..common.Element import Element
@@ -77,7 +78,8 @@ class TablesConstructor:
             .group_by_connectivity(dx=connected_border_tolerance, dy=connected_border_tolerance)
 
         # ignore overlapped groups: it'll be processed in sub-layout
-        grouped_strokes = remove_overlap(grouped_strokes) 
+        grouped_strokes = remove_overlap(grouped_strokes)
+        # print([len(g) for g in grouped_strokes])
 
         # all filling shapes
         fills = self._shapes.table_fillings
@@ -96,7 +98,8 @@ class TablesConstructor:
             table = TableStructure(strokes, **settings).parse(group_fills).to_table_block()
             if table:
                 table.set_lattice_table_block()
-                tables.append(table)            
+                tables.append(table)
+                # print(json.dumps(table.store(), ensure_ascii=False, indent=2))
 
         # assign blocks/shapes to each table
         self._blocks.assign_to_tables(tables)

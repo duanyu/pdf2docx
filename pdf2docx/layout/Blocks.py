@@ -165,14 +165,18 @@ class Blocks(ElementCollection):
         for block in self._instances:
             self._assign_block_to_tables(block, tables, blocks_in_tables, blocks)
 
+        tables_have_blocks = []
+
         # assign blocks to associated cells
         for table, blocks_in_table in zip(tables, blocks_in_tables):
             # no contents for this table
             if not blocks_in_table: continue
             table.assign_blocks(blocks_in_table)
+            tables_have_blocks.append(table)
 
         # sort in natural reading order and update layout blocks
-        blocks.extend(tables)
+        # blocks.extend(tables)
+        blocks.extend(tables_have_blocks)
         self.reset(blocks)
 
 
