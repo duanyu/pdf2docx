@@ -316,7 +316,7 @@ class _CT_Anchor(BaseOxmlElement):
     def _anchor_xml(cls, pos_x, pos_y):
         return (
             '<wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" relativeHeight="0" \n'
-            '           behindDoc="1" locked="0" layoutInCell="1" allowOverlap="1" \n'
+            '           behindDoc="0" locked="0" layoutInCell="1" allowOverlap="1" \n'
             '           %s>\n'
             '  <wp:simplePos x="0" y="0"/>\n'
             '  <wp:positionH relativeFrom="page">\n'
