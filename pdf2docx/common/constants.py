@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
-
+from importlib import resources
+import fitz
 
 # -------------------------------------
 # basic unit
@@ -87,4 +88,8 @@ CJK_UNICODE_RANGES = [
     [0xA490, 0xA4CF],  # Yi Radicals
 ]
 
-DEFAULT_FONT_NAME = 'helv'
+# DEFAULT_FONT_NAME = 'helv'
+DEFAULT_CHINESE_FONT_NAME = 'SimSun'
+root_pkg = __package__.split(".")[0]
+simsun_path = str(resources.files(root_pkg).joinpath("fonts/simsun.ttc"))
+DEFAULT_CHINESE_FONT_OBJ = fitz.Font(fontname=DEFAULT_CHINESE_FONT_NAME, fontfile=simsun_path)

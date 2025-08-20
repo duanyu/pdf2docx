@@ -34,6 +34,8 @@ from ..common.Block import Block
 from ..common.share import (rgb_component_from_name, lower_round)
 from ..common import constants
 from ..common import docx
+from copy import deepcopy
+from .TextSpan import TextSpan
 
 
 class TextBlock(Block):
@@ -200,13 +202,18 @@ class TextBlock(Block):
         # - set single side indentation if single line
         # - add minor space if multi-lines
         row_count = self.row_count
-        if row_count==1 and self.alignment == TextAlignment.LEFT:
+        width_threshold = 0.6
+        # if row_count==1 and self.alignment == TextAlignment.LEFT:
+        if self.alignment == TextAlignment.LEFT and (row_count==1 or self.bbox.width <= (width_threshold * bbox.width)):
+            # 比较窄的文本，不需要再加入right space了（方便编辑）
             self.right_space = 0
 
-        elif row_count==1 and self.alignment == TextAlignment.RIGHT:
+        # elif row_count==1 and self.alignment == TextAlignment.RIGHT:
+        elif self.alignment == TextAlignment.RIGHT and (row_count==1 or self.bbox.width <= (width_threshold * bbox.width)):
             self.left_space = 0
         
-        elif row_count==1 and self.alignment == TextAlignment.CENTER:
+        # elif row_count==1 and self.alignment == TextAlignment.CENTER:
+        elif self.alignment == TextAlignment.CENTER and (row_count==1 or self.bbox.width <= (width_threshold * bbox.width)):
             self.left_space = 0
             self.right_space = 0
         
@@ -214,6 +221,12 @@ class TextBlock(Block):
         self.lines.parse_line_break(bbox, 
             line_break_width_ratio, 
             line_break_free_space_ratio)
+
+        # print(self.row_count)
+        # print(self.raw_text)
+        # print(self.alignment)
+        # print(self.left_space)
+        # print(self.right_space)
 
 
     def parse_relative_line_spacing(self):
@@ -300,14 +313,13 @@ class TextBlock(Block):
             The left position of paragraph is set by paragraph indent, rather than ``TAB`` stop.
         '''
         pf = docx.reset_paragraph_format(p)
-
         # ------------------------------------
         # vertical spacing
         # ------------------------------------
         before_spacing = max(round(self.before_space, 1), 0.0)
         after_spacing = max(round(self.after_space, 1), 0.0)
         pf.space_before = Pt(before_spacing)
-        pf.space_after = Pt(after_spacing)        
+        pf.space_after = Pt(after_spacing)
 
         # line spacing
         if self.line_space_type==0: # exact line spacing
@@ -449,7 +461,8 @@ class TextBlock(Block):
 
         if left_aligned and right_aligned:
             # need further external check if two lines only
-            alignment = TextAlignment.JUSTIFY if len(rows)>=3 else external_alignment()
+            # alignment = TextAlignment.JUSTIFY if len(rows)>=3 else external_alignment()
+            alignment = TextAlignment.LEFT # 不用justify对齐
 
         elif center_aligned:
             alignment = TextAlignment.CENTER

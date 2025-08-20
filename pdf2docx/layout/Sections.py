@@ -4,6 +4,7 @@
 '''
 
 from docx.enum.section import WD_SECTION
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Pt
 from ..common.Collection import BaseCollection
 from ..common.docx import reset_paragraph_format
@@ -29,17 +30,39 @@ class Sections(BaseCollection):
 
 
     def make_docx(self, doc):
-        '''Create sections in docx.'''        
-        if not self: return
+        '''Create sections in docx.'''
+        if not self:
+            # 有可能有float images，make之
+            if self.parent.float_images:
+                p = doc.add_paragraph()
+                for image in self.parent.float_images:
+                    image.make_docx(p)
+            return
 
         # mark paragraph index before creating current page
         n = len(doc.paragraphs)
 
         def create_dummy_paragraph_for_section(section):
-            p = doc.add_paragraph()
-            line_height = min(section.before_space, 11)
-            pf = reset_paragraph_format(p, line_spacing=Pt(line_height))
-            pf.space_after = Pt(section.before_space-line_height)
+            before_enter_num, after_enter_num = 0, 0
+            if section.before_space >= 10:
+                before_enter_num = int(section.before_space / 10)
+                section.before_space = section.before_space - 10 * before_enter_num
+
+            if before_enter_num > 0:
+                p = doc.add_paragraph()
+                pf = p.paragraph_format
+                pf.line_spacing = Pt(10)
+                pf.space_before = Pt(0)
+                pf.space_after = Pt(0)
+                pf.alignment = WD_ALIGN_PARAGRAPH.LEFT
+                run = p.add_run('\n' * (before_enter_num - 1))
+                run.font.size = Pt(10)
+                run.font.name = 'Times New Roman'
+            else:
+                p = doc.add_paragraph()
+                line_height = min(section.before_space, 11)
+                pf = reset_paragraph_format(p, line_spacing=Pt(line_height))
+                pf.space_after = Pt(section.before_space-line_height)
 
         # ---------------------------------------------------
         # first section

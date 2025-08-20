@@ -88,6 +88,8 @@ class Converter:
             'float_image_ignorable_gap'      : 5.0,    # float image if the intersection exceeds this value
             'page_margin_factor_top'         : 0.5,    # [0,1] reduce top margin by factor
             'page_margin_factor_bottom'      : 0.5,    # [0,1] reduce bottom margin by factor
+            'page_margin_factor_left': 1,  # [0,1] reduce top margin by factor
+            'page_margin_factor_right': 1,  # [0,1] reduce bottom margin by factor
             'shape_min_dimension'            : 2.0,    # ignore shape if both width and height is lower than this value
             'max_line_spacing_ratio'         : 1.5,    # maximum line spacing ratio: line spacing / line height
             'line_overlap_threshold'         : 0.9,    # [0,1] delete line if the intersection to other lines exceeds this value

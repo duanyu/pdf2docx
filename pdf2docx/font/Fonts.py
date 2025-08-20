@@ -92,8 +92,10 @@ class Fonts(BaseCollection):
             if name == "":
                 # ttfont的逻辑有时有问题，此时用本来norm的结果
                 name = normalized_font_name
-                line_height = None
-            
+
+            if line_height is None:
+                line_height = 1.3 # 给个默认值，避免用exact line spacing（不利于编辑，会出现砍头现象）
+
             fonts.append(Font(
                 descriptor=cls._to_descriptor(name),
                 name=name,

@@ -2,8 +2,7 @@
 
 '''A group of Line objects.
 '''
-
-
+import json
 import string
 from .Line import Line
 from .TextSpan import TextSpan

@@ -27,7 +27,7 @@ this `link <https://pymupdf.readthedocs.io/en/latest/textpage.html>`_::
     }
 '''
 
-import fitz
+import fitz, math
 from docx.shared import Pt, RGBColor
 from docx.oxml.ns import qn
 from .Char import Char
@@ -58,7 +58,7 @@ class TextSpan(Element):
         self.size = raw.get('size', 12.0)
         self.ascender = raw.get('ascender', 1.0)
         self.descender = raw.get('descender', 0.0)
-        self.line_height = raw.get('line_height', -1)  # not an original key
+        self.line_height = raw.get('line_height', 1.3 * self.size)  # not an original key；默认1.3
 
         # introduced attributes
         # a list of dict: { 'type': int, 'color': int }
@@ -74,7 +74,7 @@ class TextSpan(Element):
 
         # in rare case, the font is unamed, so change font and update bbox accordingly
         if self.chars and 'UNNAMED' in self.font.upper():
-            self._change_font_and_update_bbox(constants.DEFAULT_FONT_NAME)
+            self._change_font_and_update_bbox(constants.DEFAULT_CHINESE_FONT_NAME)
 
 
     @property
@@ -117,7 +117,13 @@ class TextSpan(Element):
         self.font = font_name
 
         # compute text length under new font with that size
-        font = fitz.Font(font_name)
+        if font_name == 'SimSun':
+            font = constants.DEFAULT_CHINESE_FONT_OBJ
+            line_height_factor = 1.3
+        else:
+            font = fitz.Font(fontname=font_name)
+            line_height_factor = 1.3
+
         new_length = font.text_length(self.text, fontsize=self.size)
         if new_length > self.bbox.width:
             self.size *= self.bbox.width / new_length
@@ -145,12 +151,13 @@ class TextSpan(Element):
             x0, _, x1, _ = char.bbox
             char.update_bbox((x0, y0, x1, y1))
 
+        # 给定默认line height，避免exact line sapcing排版（会有砍头现象，不利于编辑）
+        self.line_height = line_height_factor * self.size
 
     def add(self, char:Char):
         '''Add char and update bbox accordingly.'''
         self.chars.append(char)
         self.union_bbox(char)
-
 
     def lstrip(self):
         '''Remove blanks at the left side, but keep one blank.'''
@@ -408,7 +415,8 @@ class TextSpan(Element):
         # font size
         # NOTE: only x.0 and x.5 is accepted in docx, so set character scaling accordingly
         # if the font size doesn't meet this condition.
-        font_size = round(self.size*2)/2.0
+        # font_size = round(self.size*2)/2.0
+        font_size = math.floor(self.size*2)/2.0 # 改为向下取
         docx_run.font.size = Pt(font_size)
 
         # adjust by set scaling

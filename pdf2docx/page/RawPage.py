@@ -121,16 +121,12 @@ class RawPage(BasePage, ABC):
         # Exclude hyperlink from shapes because hyperlink might exist out of page unreasonably,
         # while it should always within page since attached to text.
         shapes = Shapes([shape for shape in self.shapes if not isinstance(shape, Hyperlink)])
-        # shapes = Shapes([shape for shape in self.shapes if not isinstance(shape, Hyperlink) and not isinstance(shape, Stroke)])
-        # print(json.dumps(self.blocks[0].store(), ensure_ascii=False, indent=2))
-        # blocks = Blocks([block for block in self.blocks if len(block.text) > 0])
 
         # return default margin if no blocks exist
         if not self.blocks and not shapes: return (constants.ITP, ) * 4
 
         x0, y0, x1, y1 = self.bbox
         u0, v0, u1, v1 = self.blocks.bbox | shapes.bbox
-        # u0, v0, u1, v1 = blocks.bbox | shapes.bbox
 
         # margin
         left = max(u0-x0, 0.0)
@@ -140,7 +136,9 @@ class RawPage(BasePage, ABC):
 
         # reduce calculated top/bottom margin to leave some free space
         top *= settings['page_margin_factor_top']
+        left *= settings['page_margin_factor_left']
         bottom *= settings['page_margin_factor_bottom']
+        right *= settings['page_margin_factor_right']
 
         # use normal margin if calculated margin is large enough
         return (

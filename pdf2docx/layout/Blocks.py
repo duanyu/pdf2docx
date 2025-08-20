@@ -3,8 +3,10 @@ A group of text elements, distinguished to ``Shape`` elements. For instance, ``T
 ``ImageBlock`` or ``TableBlock`` after parsing, while ``Line`` instances at the beginning, 
 and a combination of ``Line`` and ``TableBlock`` during parsing process.
 '''
-
+import json
 import logging
+
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Pt
 from ..common import constants
 from ..common.Collection import ElementCollection
@@ -330,8 +332,42 @@ class Blocks(ElementCollection):
             # make paragraphs
             if block.is_text_image_block:                
                 # new paragraph
+                # 用换行符代替space_before/after，便于编辑
+                before_enter_num, after_enter_num = 0, 0
+                block_after_space = 0.0
+                if block.before_space >= 10:
+                    before_enter_num = int(block.before_space / 10)
+                    block.before_space = block.before_space - 10 * before_enter_num
+
+                if block.after_space >= 10:
+                    after_enter_num = int(block.after_space / 10)
+                    block.after_space = 0.0
+                    block_after_space = block.after_space - 10 * after_enter_num
+
+                if before_enter_num > 0:
+                    p = doc.add_paragraph()
+                    pf = p.paragraph_format
+                    pf.line_spacing = Pt(10)
+                    pf.space_before = Pt(0)
+                    pf.space_after = Pt(0)
+                    pf.alignment = WD_ALIGN_PARAGRAPH.LEFT
+                    run = p.add_run('\n' * (before_enter_num-1))
+                    run.font.size = Pt(10)
+                    run.font.name = 'Times New Roman'
+
                 p = doc.add_paragraph()
                 block.make_docx(p)
+
+                if after_enter_num > 0:
+                    p = doc.add_paragraph()
+                    pf = p.paragraph_format
+                    pf.line_spacing = Pt(10)
+                    pf.space_before = Pt(0)
+                    pf.space_after = Pt(0)
+                    pf.alignment = WD_ALIGN_PARAGRAPH.LEFT
+                    run = p.add_run('\n' * (after_enter_num - 1))
+                    run.font.size = Pt(10)
+                    run.font.name = 'Times New Roman'
 
                 pre_table = False # mark block type
             
@@ -377,7 +413,8 @@ class Blocks(ElementCollection):
         groups = self.group_by_connectivity(dx=-float_image_ignorable_gap, dy=-float_image_ignorable_gap)
         
         # identify floating images
-        for group in filter(lambda group: len(group)>1, groups):
+        # for group in filter(lambda group: len(group)>1, groups):
+        for group in groups: # 单个image认为是float image
             for line in filter(lambda line: line.image_spans, group):
                 float_image = ImageBlock().from_image(line.spans[0])
                 float_image.set_float_image_block()
@@ -454,7 +491,11 @@ class Blocks(ElementCollection):
             distances = []
             for block in self._instances[1:]:
                 y0, y1 = get_v_bdy(block)
-                distances.append(round(y0-ref1, 2))
+                # 负数则不加入计算
+                tmp_dis = round(y0 - ref1, 2)
+                if tmp_dis >= 0.0:
+                    distances.append(tmp_dis)
+                # distances.append(round(y0-ref1, 2))
                 ref0, ref1 = y0, y1        
             return max(distances, key=distances.count) if distances else 0.0
 
@@ -492,7 +533,7 @@ class Blocks(ElementCollection):
                     start_new_block = True
                 
                 # lower than common line spacing: needn't to create new text block
-                elif vertical_distance(ref_line, block)<=ref_dis+1.0 and \
+                elif vertical_distance(ref_line, block)<=ref_dis+2.5 and \
                     ref_dis<=max_line_spacing_ratio*line_height(ref_line):
                     start_new_block = False
                 
