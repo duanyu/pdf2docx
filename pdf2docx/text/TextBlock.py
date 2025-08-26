@@ -202,7 +202,8 @@ class TextBlock(Block):
         # - set single side indentation if single line
         # - add minor space if multi-lines
         row_count = self.row_count
-        width_threshold = 0.6
+        # 对于较窄的文本，去掉某一边的space（便于编辑）
+        width_threshold = 0.5
         # if row_count==1 and self.alignment == TextAlignment.LEFT:
         if self.alignment == TextAlignment.LEFT and (row_count==1 or self.bbox.width <= (width_threshold * bbox.width)):
             # 比较窄的文本，不需要再加入right space了（方便编辑）
