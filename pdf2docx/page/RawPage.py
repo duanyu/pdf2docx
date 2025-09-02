@@ -151,14 +151,6 @@ class RawPage(BasePage, ABC):
                     span.font = extracted_font_name
                     if font.line_height:
                         span.line_height = font.line_height * span.size
-                elif 'hei' in lower_extracted_font_name or 'ht' in lower_extracted_font_name:
-                    # 黑体
-                    span.font = "SimHei"
-                    span.line_height = simhei_line_height_ratio * span.size
-                elif 'kai' in lower_extracted_font_name or 'kt' in lower_extracted_font_name:
-                    # 楷体
-                    span.font = "KaiTi"
-                    span.line_height = 1.3 * span.size
                 elif 'song' in lower_extracted_font_name or 'simsun' in lower_extracted_font_name or 'st' in lower_extracted_font_name:
                     # 宋体
                     span.font = "SimSun"
@@ -167,6 +159,14 @@ class RawPage(BasePage, ABC):
                     # times new roman
                     span.font = 'Times New Roman'
                     span.line_height = times_new_roman_line_height_ratio * span.size
+                elif 'hei' in lower_extracted_font_name or 'ht' in lower_extracted_font_name:
+                    # 黑体
+                    span.font = "SimHei"
+                    span.line_height = simhei_line_height_ratio * span.size
+                elif 'kai' in lower_extracted_font_name or 'kt' in lower_extracted_font_name:
+                    # 楷体
+                    span.font = "KaiTi"
+                    span.line_height = 1.3 * span.size
                 else:
                     if eng_pattern.match(span.text):
                         span.font = 'Times New Roman'
@@ -174,9 +174,6 @@ class RawPage(BasePage, ABC):
                     else:
                         span.font = 'SimSun'
                         span.line_height = simsun_line_height_ratio * span.size
-                    # span.font = extracted_font_name
-                    # if font.line_height:
-                    #     span.line_height = font.line_height * span.size
 
 
     def calculate_margin(self, **settings):
