@@ -159,11 +159,11 @@ class RawPage(BasePage, ABC):
                     # times new roman
                     span.font = 'Times New Roman'
                     span.line_height = times_new_roman_line_height_ratio * span.size
-                elif 'hei' in lower_extracted_font_name or 'ht' in lower_extracted_font_name:
+                elif 'hei' in lower_extracted_font_name:
                     # 黑体
                     span.font = "SimHei"
                     span.line_height = simhei_line_height_ratio * span.size
-                elif 'kai' in lower_extracted_font_name or 'kt' in lower_extracted_font_name:
+                elif 'kai' in lower_extracted_font_name:
                     # 楷体
                     span.font = "KaiTi"
                     span.line_height = 1.3 * span.size
