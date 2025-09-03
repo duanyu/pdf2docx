@@ -397,7 +397,7 @@ def set_cell_margins(cell:_Cell, **kwargs):
     tcPr = tc.get_or_add_tcPr()
     tcMar = OxmlElement('w:tcMar')
  
-    for m in ['top', 'start', 'bottom', 'end']:
+    for m in ['top', 'start', 'bottom', 'end', 'left', 'right']:
         if m in kwargs:
             node = OxmlElement("w:{}".format(m))
             node.set(qn('w:w'), str(kwargs.get(m)))

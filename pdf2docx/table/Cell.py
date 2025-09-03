@@ -5,7 +5,6 @@ from ..common.Element import Element
 from ..layout.Layout import Layout
 from ..common import docx
 
-
 class Cell(Layout):
     '''Cell object.'''
     def __init__(self, raw:dict=None):
@@ -147,7 +146,7 @@ class Cell(Layout):
         # ---------------------
         # NOTE: the start position of a table is based on text in cell, rather than
         # left border of table. They're almost aligned if left-margin of cell is zero.
-        docx.set_cell_margins(docx_cell, start=0, end=0)
+        docx.set_cell_margins(docx_cell, start=0, end=0, left=0, right=0)
 
         # set vertical direction if contained text blocks are in vertical direction
         if self.blocks.is_vertical_text:

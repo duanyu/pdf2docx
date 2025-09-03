@@ -20,6 +20,8 @@ from ..text.Lines import Lines
 from ..table.Cell import Cell
 from ..image.ImageBlock import ImageBlock
 from ..table.TableBlock import TableBlock
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
 
 
 class Blocks(ElementCollection):
@@ -320,10 +322,11 @@ class Blocks(ElementCollection):
                 p = doc.add_paragraph()
                 reset_paragraph_format(p, line_spacing=Pt(h))
 
-            # new table            
+            # new table
             table = doc.add_table(rows=table_block.num_rows, cols=table_block.num_cols)
-            table.autofit = False
-            table.allow_autofit  = False
+            # 导致wps和word的表格列宽不同的罪魁祸首
+            # table.autofit = False
+            # table.allow_autofit = False
             table_block.make_docx(table)
 
         pre_table = False
