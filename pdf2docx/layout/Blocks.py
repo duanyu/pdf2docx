@@ -20,8 +20,6 @@ from ..text.Lines import Lines
 from ..table.Cell import Cell
 from ..image.ImageBlock import ImageBlock
 from ..table.TableBlock import TableBlock
-from docx.oxml import OxmlElement
-from docx.oxml.ns import qn
 
 
 class Blocks(ElementCollection):
