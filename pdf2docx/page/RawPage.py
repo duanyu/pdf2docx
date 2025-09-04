@@ -25,6 +25,7 @@ from fontTools.ttLib import TTFont
 
 # DEFAULT_FONT_NAME = 'helv'
 # root_pkg = __package__.split(".")[0]
+
 # simsun_path = str(resources.files(root_pkg).joinpath("fonts/simsun.ttc"))
 # SIMSUN_FONT_OBJ = fitz.Font(fontname="SimSun", fontfile=simsun_path)
 # simsun_line_height_ratio = Fonts.get_line_height_factor(TTFont(simsun_path, fontNumber=0))
@@ -38,6 +39,14 @@ simhei_line_height_ratio = 1.3
 # roman_path = str(resources.files(root_pkg).joinpath("fonts/Times New Roman/times new roman.ttf"))
 # times_new_roman_line_height_ratio = Fonts.get_line_height_factor(TTFont(roman_path))
 times_new_roman_line_height_ratio = 1.115
+
+# fangsong_path = str(resources.files(root_pkg).joinpath("fonts/仿宋_GB2312.ttf"))
+# fangsong_line_height_ratio = Fonts.get_line_height_factor(TTFont(fangsong_path))
+fangsong_line_height_ratio = 1.3
+
+# dengxian_path = str(resources.files(root_pkg).joinpath("fonts/等线.ttf"))
+# dengxian_line_height_ratio = Fonts.get_line_height_factor(TTFont(dengxian_path))
+dengxian_line_height_ratio = 1.432
 
 class RawPage(BasePage, ABC):
     '''A wrapper of page engine.'''
@@ -151,6 +160,14 @@ class RawPage(BasePage, ABC):
                     span.font = extracted_font_name
                     if font.line_height:
                         span.line_height = font.line_height * span.size
+                elif 'dengxian' in lower_extracted_font_name:
+                    # 等线
+                    span.font = "DengXian"
+                    span.line_height = dengxian_line_height_ratio * span.size
+                elif 'fangsong' in lower_extracted_font_name or 'fzfs' in lower_extracted_font_name:
+                    # 仿宋
+                    span.font = "FangSong"
+                    span.line_height = fangsong_line_height_ratio * span.size
                 elif 'song' in lower_extracted_font_name or 'simsun' in lower_extracted_font_name or 'st' in lower_extracted_font_name:
                     # 宋体
                     span.font = "SimSun"
