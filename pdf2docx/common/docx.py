@@ -15,6 +15,7 @@ from docx.image.exceptions import UnrecognizedImageError
 from docx.table import _Cell
 from docx.opc.constants import RELATIONSHIP_TYPE
 from .share import rgb_value
+from docx.text.run import Run
 
 
 # ---------------------------------------------------------
@@ -218,7 +219,7 @@ def add_hyperlink(paragraph, url, text):
     Returns: 
         Run: A Run object containing the hyperlink.
     """
-
+    # 兼容word & wps
     # This gets access to the document.xml.rels file and gets a new relation id value
     part = paragraph.part
     r_id = part.relate_to(url, RELATIONSHIP_TYPE.HYPERLINK, is_external=True)
@@ -242,14 +243,20 @@ def add_hyperlink(paragraph, url, text):
     # Join all the xml elements together add add the required text to the w:r element
     rPr.append(rStyle)
     new_run.append(rPr)
-    new_run.text = text
+    new_run_text = OxmlElement("w:t")
+    new_run_text.text = text
+    new_run.append(new_run_text)
+
+    # new_run.text = text
     hyperlink.append(new_run)
 
-    # Create a new Run object and add the hyperlink into it
-    r = paragraph.add_run()
-    r._r.append(hyperlink)
-
-    return r
+    # # Create a new Run object and add the hyperlink into it
+    # r = paragraph.add_run()
+    # r._r.append(hyperlink)
+    # return r
+    # 兼容wps & word
+    paragraph._p.append(hyperlink)
+    return Run(new_run, paragraph)
 
 
 # ---------------------------------------------------------
