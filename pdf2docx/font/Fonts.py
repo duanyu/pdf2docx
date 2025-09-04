@@ -101,7 +101,7 @@ class Fonts(BaseCollection):
                 name=name,
                 line_height=line_height))
 
-            print('description: ', cls._to_descriptor(name), 'name: ', name, 'basename: ', basename, 'normalized_font_name: ', normalized_font_name, 'line_height: ', line_height)
+            # print('description: ', cls._to_descriptor(name), 'name: ', name, 'basename: ', basename, 'normalized_font_name: ', normalized_font_name, 'line_height: ', line_height)
 
         return cls(fonts)
 

@@ -48,6 +48,10 @@ fangsong_line_height_ratio = 1.3
 # dengxian_line_height_ratio = Fonts.get_line_height_factor(TTFont(dengxian_path))
 dengxian_line_height_ratio = 1.432
 
+# arial_path = str(resources.files(root_pkg).joinpath("fonts/Arial.ttf"))
+# arial_line_height_ratio = Fonts.get_line_height_factor(TTFont(arial_path))
+arial_line_height_ratio = 1.15
+
 class RawPage(BasePage, ABC):
     '''A wrapper of page engine.'''
 
@@ -160,6 +164,10 @@ class RawPage(BasePage, ABC):
                     span.font = extracted_font_name
                     if font.line_height:
                         span.line_height = font.line_height * span.size
+                elif 'arial' in lower_extracted_font_name:
+                    # Arial
+                    span.font = "Arial"
+                    span.line_height = arial_line_height_ratio * span.size
                 elif 'dengxian' in lower_extracted_font_name:
                     # 等线
                     span.font = "DengXian"
