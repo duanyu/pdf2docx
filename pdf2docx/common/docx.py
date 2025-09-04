@@ -240,7 +240,7 @@ def add_hyperlink(paragraph, url, text):
     rStyle = OxmlElement('w:rStyle')
     rStyle.set(qn('w:val'), 'Hyperlink')
 
-    # Join all the xml elements together add add the required text to the w:r element
+    # Join all the xml elements together and add the required text to the w:r element
     rPr.append(rStyle)
     new_run.append(rPr)
     new_run_text = OxmlElement("w:t")
