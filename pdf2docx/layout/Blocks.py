@@ -414,7 +414,7 @@ class Blocks(ElementCollection):
         
         # identify floating images
         # for group in filter(lambda group: len(group)>1, groups):
-        for group in groups: # 单个image认为是float image
+        for group in groups: # 单个image直接认为是float image
             for line in filter(lambda line: line.image_spans, group):
                 float_image = ImageBlock().from_image(line.spans[0])
                 float_image.set_float_image_block()

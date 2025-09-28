@@ -36,6 +36,7 @@ from ..common.share import (RectType, rgb_value, rgb_component, decode)
 from ..common import constants
 from ..common import docx
 from ..shape.Shape import Shape
+from latex2word import LatexToWordElement
 
 
 class TextSpan(Element):
@@ -68,6 +69,9 @@ class TextSpan(Element):
         # positive to expand space, otherwise condense
         # just an attribute placeholder: not used yet
         self.char_spacing = raw.get('char_spacing', 0.0)
+
+        # 支持展示公式
+        self.is_equation = raw.get("is_equation", False)
 
         # init text span element
         super().__init__(raw)
@@ -193,7 +197,8 @@ class TextSpan(Element):
             'flags': self.flags,
             'text': self.text,
             'style': self.style,
-            'char_spacing': self.char_spacing
+            'char_spacing': self.char_spacing,
+            "is_equation": self.is_equation
         }) # not storing chars for space saving
         return res
 
@@ -380,10 +385,21 @@ class TextSpan(Element):
                 docx_run = docx.add_hyperlink(paragraph, style['uri'], self.text)
                 break
         else:
-            docx_run = paragraph.add_run(self.text)
+            if self.is_equation:
+                # 公式的话，从latex -> word-公式
+                latex_to_word = LatexToWordElement(self.text)
+                try:
+                    latex_to_word.add_latex_to_paragraph(paragraph)
+                except:
+                    # 可能会报错（transformers.pdf），此时当作文本
+                    docx_run = paragraph.add_run(self.text)
+            else:
+                # 否则是纯文本
+                docx_run = paragraph.add_run(self.text)
 
         # set text style, e.g. font, underline and highlight
-        self._set_text_format(docx_run)
+        if not self.is_equation:
+            self._set_text_format(docx_run)
 
         # set charters spacing
         if self.char_spacing:

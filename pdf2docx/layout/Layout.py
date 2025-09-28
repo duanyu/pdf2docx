@@ -111,7 +111,6 @@ class Layout(Element, ABC):
 
         # parse tables
         self._parse_table(**settings)
-
         # parse paragraphs
         self._parse_paragraph(**settings)
 
