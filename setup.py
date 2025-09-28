@@ -47,7 +47,7 @@ setup(
     author_email='support@artifex.com',
     url='https://artifex.com/',
     packages=find_packages(exclude=EXCLUDE_FROM_PACKAGES),
-    package_data={"pdf2docx": ["fonts/*", "fonts/*/*.ttf"]},
+    package_data={"pdf2docx": ["fonts/*", "fonts/*/*.ttf", "fonts/*/*.ttc"]},
     include_package_data=True,
     zip_safe=False,
     install_requires=load_requirements("requirements.txt"),

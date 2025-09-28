@@ -36,7 +36,6 @@ from .Rows import Rows
 from ..common.Block import Block
 from ..common import docx
 
-
 class TableBlock(Block):
     '''Table block.'''
     def __init__(self, raw:dict=None):

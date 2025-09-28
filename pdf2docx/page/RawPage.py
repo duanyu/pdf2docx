@@ -6,7 +6,7 @@
 * parse page structure roughly, i.e. section and column
 '''
 
-import json
+import json, fitz, re
 from abc import (ABC, abstractmethod)
 from .BasePage import BasePage
 from ..layout.Section import Section
@@ -19,7 +19,38 @@ from ..text.TextSpan import TextSpan
 from ..common.share import debug_plot
 from ..common import constants
 from ..common.Collection import Collection
+from importlib import resources
+from fontTools.ttLib import TTFont
 
+
+# DEFAULT_FONT_NAME = 'helv'
+# root_pkg = __package__.split(".")[0]
+
+# simsun_path = str(resources.files(root_pkg).joinpath("fonts/simsun.ttc"))
+# SIMSUN_FONT_OBJ = fitz.Font(fontname="SimSun", fontfile=simsun_path)
+# simsun_line_height_ratio = Fonts.get_line_height_factor(TTFont(simsun_path, fontNumber=0))
+simsun_line_height_ratio = 1.3
+
+# simhei_path = str(resources.files(root_pkg).joinpath("fonts/SimHei.ttf"))
+# SIMHEI_FONT_OBJ = fitz.Font(fontname="SimHei", fontfile=simhei_path)
+# simhei_line_height_ratio = Fonts.get_line_height_factor(TTFont(simhei_path))
+simhei_line_height_ratio = 1.3
+
+# roman_path = str(resources.files(root_pkg).joinpath("fonts/Times New Roman/times new roman.ttf"))
+# times_new_roman_line_height_ratio = Fonts.get_line_height_factor(TTFont(roman_path))
+times_new_roman_line_height_ratio = 1.115
+
+# fangsong_path = str(resources.files(root_pkg).joinpath("fonts/仿宋_GB2312.ttf"))
+# fangsong_line_height_ratio = Fonts.get_line_height_factor(TTFont(fangsong_path))
+fangsong_line_height_ratio = 1.3
+
+# dengxian_path = str(resources.files(root_pkg).joinpath("fonts/等线.ttf"))
+# dengxian_line_height_ratio = Fonts.get_line_height_factor(TTFont(dengxian_path))
+dengxian_line_height_ratio = 1.432
+
+# arial_path = str(resources.files(root_pkg).joinpath("fonts/Arial.ttf"))
+# arial_line_height_ratio = Fonts.get_line_height_factor(TTFont(arial_path))
+arial_line_height_ratio = 1.15
 
 class RawPage(BasePage, ABC):
     '''A wrapper of page engine.'''
@@ -95,6 +126,17 @@ class RawPage(BasePage, ABC):
         Args:
             fonts (Fonts): Fonts parsed by ``fonttools``.
         '''
+        # 定义允许的字符集
+        letters_digits = "A-Za-z0-9"
+        spaces = r"\s"  # 包含空格、Tab、换行等
+        punctuation = r""".,;:!?'"()\[\]{}\/\\@#$%&*\+=_\-~`<>|"""  # 常见英文标点
+
+        # 拼接正则
+        allowed_chars = f"[{letters_digits}{spaces}{punctuation}]+"
+
+        # 编译 pattern
+        eng_pattern = re.compile(f"^{allowed_chars}$")
+
         # get all text span
         spans = []
         for line in self.blocks:
@@ -103,12 +145,60 @@ class RawPage(BasePage, ABC):
         # check and update font name, line height
         for span in spans:
             font = fonts.get(span.font)
-            if not font: continue
+            if not font:
+                # 没有font的，给个默认字体
+                # 对于字母和数字，给new roman；其他，给simsun
+                if eng_pattern.match(span.text):
+                    span.font = 'Times New Roman'
+                    span.line_height = times_new_roman_line_height_ratio * span.size
+                else:
+                    span.font = 'SimSun'
+                    span.line_height = simsun_line_height_ratio * span.size
+            else:
+                # 对font提取结果也要做个处理（很多解析出来的name，无法直接用在word/wps中，这会导致默认字体的排版不符合要求）
+                # update font properties with font parsed by fonttools
+                extracted_font_name = font.name
+                lower_extracted_font_name = extracted_font_name.lower()
 
-            # update font properties with font parsed by fonttools
-            span.font = font.name
-            if font.line_height:
-                span.line_height = font.line_height * span.size
+                if extracted_font_name in ["Microsoft YaHei", "Calibri", "Arial"]:
+                    span.font = extracted_font_name
+                    if font.line_height:
+                        span.line_height = font.line_height * span.size
+                elif 'arial' in lower_extracted_font_name:
+                    # Arial
+                    span.font = "Arial"
+                    span.line_height = arial_line_height_ratio * span.size
+                elif 'dengxian' in lower_extracted_font_name:
+                    # 等线
+                    span.font = "DengXian"
+                    span.line_height = dengxian_line_height_ratio * span.size
+                elif 'fangsong' in lower_extracted_font_name or 'fzfs' in lower_extracted_font_name:
+                    # 仿宋
+                    span.font = "FangSong"
+                    span.line_height = fangsong_line_height_ratio * span.size
+                elif 'song' in lower_extracted_font_name or 'simsun' in lower_extracted_font_name or 'st' in lower_extracted_font_name:
+                    # 宋体
+                    span.font = "SimSun"
+                    span.line_height = simsun_line_height_ratio * span.size
+                elif 'times' in lower_extracted_font_name:
+                    # times new roman
+                    span.font = 'Times New Roman'
+                    span.line_height = times_new_roman_line_height_ratio * span.size
+                elif 'hei' in lower_extracted_font_name or 'fzht' in lower_extracted_font_name:
+                    # 黑体
+                    span.font = "SimHei"
+                    span.line_height = simhei_line_height_ratio * span.size
+                elif 'kai' in lower_extracted_font_name or 'fzkt' in lower_extracted_font_name:
+                    # 楷体
+                    span.font = "KaiTi"
+                    span.line_height = 1.3 * span.size
+                else:
+                    if eng_pattern.match(span.text):
+                        span.font = 'Times New Roman'
+                        span.line_height = times_new_roman_line_height_ratio * span.size
+                    else:
+                        span.font = 'SimSun'
+                        span.line_height = simsun_line_height_ratio * span.size
 
 
     def calculate_margin(self, **settings):
