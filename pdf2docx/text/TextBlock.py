@@ -50,9 +50,13 @@ class TextBlock(Block):
         # collect lines
         self.lines = Lines(parent=self).restore(raw.get('lines', []))
 
+        self.is_paragraph = raw.get('is_paragraph', False)
+
         # set type
         self.set_text_block()
 
+    def set_paragraph(self):
+        self.is_paragraph = True
 
     @property
     def text(self):
@@ -239,26 +243,29 @@ class TextBlock(Block):
             be broken in exact spacing mode, e.g. overlapping of lines.
         '''
         # return default line spacing if any images exists
-        for line in self.lines:
-            if list(span for span in line.spans if isinstance(span, ImageSpan)):
-                self.line_space = constants.DEFAULT_LINE_SPACING
-                return
-
-        # otherwise, calculate average line spacing
-        idx = 1 if self.is_horizontal_text else 0
-        block_height = self.bbox[idx+2]-self.bbox[idx]
-        
-        # An approximate expression: 
-        # standard_line_height * relative_line_spacing = block_height
-        rows = self.lines.group_by_physical_rows()        
-        fun_max_line_height = lambda line: max(span.line_height for span in line.spans)
-        fun_max_row_height = lambda row: max(fun_max_line_height(line) for line in row)
-        standard_height = sum(fun_max_row_height(row) for row in rows)
-        line_space = block_height/standard_height
-
-        # overlap may exist when multi-rows, so set minimum spacing  -> default spacing
-        if len(rows)>1: line_space = max(line_space, constants.DEFAULT_LINE_SPACING)
-        self.line_space = line_space
+        if not self.is_paragraph:
+            for line in self.lines:
+                if list(span for span in line.spans if isinstance(span, ImageSpan)):
+                    self.line_space = constants.DEFAULT_LINE_SPACING
+                    return
+    
+            # otherwise, calculate average line spacing
+            idx = 1 if self.is_horizontal_text else 0
+            block_height = self.bbox[idx+2]-self.bbox[idx]
+            
+            # An approximate expression: 
+            # standard_line_height * relative_line_spacing = block_height
+            rows = self.lines.group_by_physical_rows()        
+            fun_max_line_height = lambda line: max(span.line_height for span in line.spans)
+            fun_max_row_height = lambda row: max(fun_max_line_height(line) for line in row)
+            standard_height = sum(fun_max_row_height(row) for row in rows)
+            line_space = block_height/standard_height
+    
+            # overlap may exist when multi-rows, so set minimum spacing  -> default spacing
+            if len(rows)>1: line_space = max(line_space, constants.DEFAULT_LINE_SPACING)
+            self.line_space = line_space
+        else:
+            self.line_space = constants.DEFAULT_LINE_SPACING
 
 
     def parse_exact_line_spacing(self):
@@ -438,7 +445,11 @@ class TextBlock(Block):
             else:
                 return TextAlignment.RIGHT
         
-        if len(rows) == 1: return external_alignment()
+        if len(rows) == 1: 
+            if self.is_paragraph and self.bbox.width >= 0.7 * bbox.width:
+                # 段落，且较宽
+                return TextAlignment.LEFT
+            return external_alignment()
 
         # --------------------------------------------------------------------------
         # Check alignment of internal lines:

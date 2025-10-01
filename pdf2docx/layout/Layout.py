@@ -159,7 +159,8 @@ class Layout(Element, ABC):
         self.blocks.parse_block(
             settings['max_line_spacing_ratio'],
             settings['line_break_free_space_ratio'],
-            settings['new_paragraph_free_space_ratio'])
+            settings['new_paragraph_free_space_ratio'],
+            settings['paragraph_already'],)
 
         # parse text format, e.g. highlight, underline
         self.blocks.parse_text_format(

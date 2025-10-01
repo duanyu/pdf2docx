@@ -45,6 +45,9 @@ class Line(Element):
         # line break
         self.line_break = raw.get('line_break', 0) # don't break line by default
         self.tab_stop = raw.get('tab_stop', 0) # no TAB stop before the line by default
+
+        # 是否已提前划分了paragraph
+        self.is_paragraph = raw.get('is_paragraph', False)
         
         # remove key 'bbox' since it is calculated from contained spans
         if 'bbox' in raw: raw.pop('bbox') 
@@ -115,7 +118,8 @@ class Line(Element):
             'tab_stop'  : self.tab_stop,
             'spans'     : [
                 span.store() for span in self.spans
-            ]
+            ],
+            'is_paragraph': self.is_paragraph,
         })
 
         return res

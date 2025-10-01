@@ -259,22 +259,27 @@ class Blocks(ElementCollection):
         close_table()
 
         return res
+            
 
-
-    def parse_block(self, max_line_spacing_ratio:float, line_break_free_space_ratio:float, new_paragraph_free_space_ratio:float):
+    def parse_block(self, max_line_spacing_ratio:float, line_break_free_space_ratio:float, new_paragraph_free_space_ratio:float, paragraph_already:bool = False):
         '''Group lines into text block.'''
-        # sort in normal reading order
-        self.sort_in_reading_order_plus()
-
-        # join lines with similar properties, e.g. spacing, together into text block
-        blocks = self._join_lines_vertically(max_line_spacing_ratio)
-
-        # split text block by checking text
-        blocks = self._split_text_block_vertically(blocks,
-            line_break_free_space_ratio, 
-            new_paragraph_free_space_ratio)
-        
-        self.reset(blocks)
+        if not paragraph_already:
+            # sort in normal reading order
+            self.sort_in_reading_order_plus()
+    
+            # join lines with similar properties, e.g. spacing, together into text block
+            blocks = self._join_lines_vertically(max_line_spacing_ratio)
+    
+            # split text block by checking text
+            blocks = self._split_text_block_vertically(blocks,
+                line_break_free_space_ratio, 
+                new_paragraph_free_space_ratio)
+            
+            self.reset(blocks)
+        else:
+            # vlm模式已经分好段了
+            blocks = self.restore_paragraph()
+            self.reset(blocks)
 
 
     def parse_text_format(self, rects, delete_end_line_hyphen:bool):
@@ -465,6 +470,35 @@ class Blocks(ElementCollection):
             blocks.append(block)
 
 
+    def restore_paragraph(self):
+        # 从vlm的分段结果中恢复
+        blocks = [] # type: list[TextBlock]
+        lines = []  # type: list[Line]
+
+        self.sort_in_reading_order_plus()
+        
+        def close_text_block(is_paragraph=False):
+            if not lines: return
+            block = TextBlock()
+            block.add(lines)
+            if is_paragraph:
+                block.set_paragraph()
+            blocks.append(block)
+            lines.clear()
+
+        for block in self._instances:
+            # line + table_block + line（paragraph，vlm得到的)
+            # print(block.store())
+            if isinstance(block, TableBlock):
+                close_text_block()
+                blocks.append(block)
+            else:
+                lines.append(block)
+                close_text_block(block.is_paragraph)
+                    
+        return blocks
+
+
     def _join_lines_vertically(self, max_line_spacing_ratio:float):
         '''Create text blocks by merge lines with same properties (spacing, font, size) in 
         vertical direction. At this moment, the block instance is either Line or TableBlock.
@@ -496,7 +530,6 @@ class Blocks(ElementCollection):
                 tmp_dis = round(y0 - ref1, 2)
                 if tmp_dis >= 0.0:
                     distances.append(tmp_dis)
-                # distances.append(round(y0-ref1, 2))
                 ref0, ref1 = y0, y1        
             return max(distances, key=distances.count) if distances else 0.0
 
