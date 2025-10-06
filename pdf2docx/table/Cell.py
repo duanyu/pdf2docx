@@ -1,9 +1,45 @@
 '''Table Cell object.'''
 
 from docx.shared import Pt
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
+        
 from ..common.Element import Element
 from ..layout.Layout import Layout
 from ..common import docx
+
+
+def set_cell_width(cell, width=None):
+    tcPr = cell._tc.get_or_add_tcPr()
+    tcW = tcPr.find(qn('w:tcW'))
+    if tcW is None:
+        tcW = OxmlElement('w:tcW')
+        tcPr.append(tcW)
+    if width:
+        tcW.set(qn('w:w'), str(int(width)))  # 单位: 1/20 pt
+        tcW.set(qn('w:type'), 'dxa')        # 可调节宽度
+    else:
+        tcW.set(qn('w:type'), 'auto')       # 自动宽度
+
+
+def set_cell_autowrap(cell, autowrap=True):
+    """
+    设置表格单元格是否自动换行
+    :param cell: docx.table._Cell 对象
+    :param autowrap: True = 自动换行 (默认), False = 不换行
+    """
+    tcPr = cell._tc.get_or_add_tcPr()
+    noWrap = tcPr.find(qn('w:noWrap'))
+    if autowrap:
+        # 移除 noWrap，恢复自动换行
+        if noWrap is not None:
+            tcPr.remove(noWrap)
+    else:
+        # 添加或设置 noWrap
+        if noWrap is None:
+            noWrap = OxmlElement('w:noWrap')
+            tcPr.append(noWrap)
+        noWrap.set(qn('w:val'), 'true')
 
 class Cell(Layout):
     '''Cell object.'''
@@ -90,6 +126,9 @@ class Cell(Layout):
         # experience: width of merged cells may change if not setting width for merged cells
         x0, y0, x1, y1 = self.bbox
         docx_cell.width = Pt(x1-x0)
+
+        # 设置自动换行
+        set_cell_autowrap(docx_cell, autowrap=True)
 
         # insert contents
         # NOTE: there exists an empty paragraph already in each cell, which should be deleted

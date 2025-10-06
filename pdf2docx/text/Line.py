@@ -57,6 +57,9 @@ class Line(Element):
         self.spans = Spans(parent=self).restore(raw.get('spans', []))        
 
     
+    def set_paragraph(self):
+        self.is_paragraph = True
+
     @property
     def text(self):
         '''Joining span text. Note image is translated to a placeholder ``<image>``.'''

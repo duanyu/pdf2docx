@@ -488,8 +488,13 @@ class Blocks(ElementCollection):
 
         for block in self._instances:
             # line + table_block + line（paragraph，vlm得到的)
-            # print(block.store())
+            # vlm的table block，需要把block里面设置为is_paragraph=True
             if isinstance(block, TableBlock):
+                # 这时候，row-cell-blocks里面还是Line，不是block
+                for row in block._rows:
+                    for cell in row._cells:
+                        for bb in cell.blocks:
+                            bb.set_paragraph()
                 close_text_block()
                 blocks.append(block)
             else:
