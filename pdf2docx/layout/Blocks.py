@@ -28,7 +28,14 @@ class Blocks(ElementCollection):
         ''' A collection of text based elements, e.g. lines, images or blocks.'''
         super().__init__(instances, parent)
         self._floating_image_blocks = []
+        self.is_vlm = False
+        self.is_text_center = False
 
+    def set_vlm(self):
+        self.is_vlm = True
+
+    def set_text_center(self):
+        self.is_text_center = True
 
     def _update_bbox(self, block:Block):
         '''Override. The parent is ``Layout``, which is not necessary to update its bbox. 
@@ -278,6 +285,7 @@ class Blocks(ElementCollection):
             self.reset(blocks)
         else:
             # vlm模式已经分好段了
+            self.set_vlm()
             blocks = self.restore_paragraph()
             self.reset(blocks)
 
@@ -330,6 +338,8 @@ class Blocks(ElementCollection):
             # 导致wps和word的表格列宽不同的罪魁祸首
             # table.autofit = False
             # table.allow_autofit = False
+            if self.is_vlm:
+                table_block.set_default()
             table_block.make_docx(table)
 
         pre_table = False
@@ -362,6 +372,8 @@ class Blocks(ElementCollection):
                     run.font.name = 'Times New Roman'
 
                 p = doc.add_paragraph()
+                if isinstance(block, TextBlock) and self.is_text_center:
+                    block.set_alignment(is_center=True)
                 block.make_docx(p)
 
                 if after_enter_num > 0:
@@ -475,6 +487,7 @@ class Blocks(ElementCollection):
         blocks = [] # type: list[TextBlock]
         lines = []  # type: list[Line]
 
+        # 按照阅读顺序排序
         self.sort_in_reading_order_plus()
         
         def close_text_block(is_paragraph=False):

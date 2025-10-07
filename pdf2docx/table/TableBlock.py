@@ -48,6 +48,11 @@ class TableBlock(Block):
         # lattice table by default
         self.set_lattice_table_block()
 
+        self.is_default = False
+
+    def set_default(self):
+        self.is_default = True
+
     def __getitem__(self, idx):
         try:
             row = self._rows[idx]
@@ -170,4 +175,4 @@ class TableBlock(Block):
 
         # set format and contents row by row
         for idx_row in range(len(table.rows)):
-            self._rows[idx_row].make_docx(table, idx_row)
+            self._rows[idx_row].make_docx(table, idx_row, self.is_default)

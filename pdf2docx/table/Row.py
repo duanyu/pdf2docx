@@ -53,7 +53,7 @@ class Row(Element):
         return res
 
 
-    def make_docx(self, table, idx_row:int):
+    def make_docx(self, table, idx_row:int, is_default:bool):
         '''Create row of docx table.
         
         Args:
@@ -75,4 +75,4 @@ class Row(Element):
 
         # set cell style and contents
         for idx_col in range(len(table.columns)):
-            self._cells[idx_col].make_docx(table, (idx_row, idx_col))
+            self._cells[idx_col].make_docx(table, (idx_row, idx_col), is_default)

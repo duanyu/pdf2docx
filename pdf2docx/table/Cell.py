@@ -3,6 +3,7 @@
 from docx.shared import Pt
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
+from docx.enum.table import WD_ALIGN_VERTICAL
         
 from ..common.Element import Element
 from ..layout.Layout import Layout
@@ -54,7 +55,7 @@ class Cell(Layout):
         self.border_width = raw.get('border_width', (0,0,0,0)) # type: tuple [float]
         self.merged_cells = raw.get('merged_cells', (1,1)) # type: tuple [int]
 
-
+    
     @property
     def text(self):
         '''Text contained in this cell.'''
@@ -83,7 +84,8 @@ class Cell(Layout):
             'bg_color': self.bg_color,
             'border_color': self.border_color,
             'border_width': self.border_width,
-            'merged_cells': self.merged_cells
+            'merged_cells': self.merged_cells,
+            'is_default': self.is_default
         })
         return res
 
@@ -94,7 +96,7 @@ class Cell(Layout):
         self.blocks.plot(page)
 
 
-    def make_docx(self, table, indexes):
+    def make_docx(self, table, indexes, is_default:bool):
         '''Set cell style and assign contents.
 
         Args:
@@ -127,8 +129,10 @@ class Cell(Layout):
         x0, y0, x1, y1 = self.bbox
         docx_cell.width = Pt(x1-x0)
 
-        # 设置自动换行
-        set_cell_autowrap(docx_cell, autowrap=True)
+        if is_default:
+             # 默认格式：设置自动换行 + 垂直居中
+            set_cell_autowrap(docx_cell, autowrap=True)
+            docx_cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
 
         # insert contents
         # NOTE: there exists an empty paragraph already in each cell, which should be deleted
@@ -137,6 +141,9 @@ class Cell(Layout):
         # repair error.
         if self.blocks:
             docx_cell._element.clear_content()
+            if is_default:
+                # 默认格式：水平居中
+                self.blocks.set_text_center()
             self.blocks.make_docx(docx_cell)
 
 

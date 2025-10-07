@@ -226,13 +226,7 @@ class TextBlock(Block):
         self.lines.parse_line_break(bbox, 
             line_break_width_ratio, 
             line_break_free_space_ratio)
-
-        # print(self.row_count)
-        # print(self.raw_text)
-        # print(self.alignment)
-        # print(self.left_space)
-        # print(self.right_space)
-
+        
 
     def parse_relative_line_spacing(self):
         '''Calculate relative line spacing, e.g. `spacing = 1.02`.  Relative line spacing is based on standard 
@@ -305,6 +299,10 @@ class TextBlock(Block):
             self.line_space += self.before_space / count
             self.before_space = 0.0
 
+
+    def set_alignment(self, is_center):
+        if is_center:
+            self.alignment=TextAlignment.CENTER
 
     def make_docx(self, p):
         '''Create paragraph for a text block.
