@@ -17,7 +17,7 @@ class Spans(ElementCollection):
                 span = ImageSpan(raw_span)
             else:
                 span = TextSpan(raw_span)
-                if not span.text.strip() and not span.style: 
+                if not span.text.strip() and not span.style and not span.valid_white_space: 
                     span = None
 
             self.append(span)

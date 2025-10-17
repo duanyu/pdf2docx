@@ -22,6 +22,7 @@ to distinguish these different layouts.
 
 from docx.enum.section import WD_SECTION
 from ..common.docx import set_columns
+from ..common.docx import set_equal_columns
 from ..common.Collection import BaseCollection
 from .Column import Column
 

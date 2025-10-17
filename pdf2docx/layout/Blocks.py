@@ -489,7 +489,7 @@ class Blocks(ElementCollection):
 
         # 按照阅读顺序排序
         self.sort_in_reading_order_plus()
-        
+
         def close_text_block(is_paragraph=False):
             if not lines: return
             block = TextBlock()
@@ -500,6 +500,7 @@ class Blocks(ElementCollection):
             lines.clear()
 
         for block in self._instances:
+            # print(block.store())
             # line + table_block + line（paragraph，vlm得到的)
             # vlm的table block，需要把block里面设置为is_paragraph=True
             if isinstance(block, TableBlock):

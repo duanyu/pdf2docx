@@ -61,6 +61,8 @@ class TextSpan(Element):
         self.descender = raw.get('descender', 0.0)
         self.line_height = raw.get('line_height', 1.3 * self.size)  # not an original key；默认1.3
 
+        self.valid_white_space = raw.get('valid_white_space', False)
+
         # introduced attributes
         # a list of dict: { 'type': int, 'color': int }
         self.style = raw.get('style', [])
