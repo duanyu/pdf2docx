@@ -27,7 +27,7 @@ this `link <https://pymupdf.readthedocs.io/en/latest/textpage.html>`_::
     }
 '''
 
-import fitz, math
+import fitz, math, re
 from docx.shared import Pt, RGBColor
 from docx.oxml.ns import qn
 from .Char import Char
@@ -37,7 +37,12 @@ from ..common import constants
 from ..common import docx
 from ..shape.Shape import Shape
 from latex2word import LatexToWordElement
+from lxml import etree
 
+def to_wps(latex):
+    latex = latex.replace('xmlns:mml="http://www.w3.org/1998/Math/MathML"', 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"')
+    latex = latex.replace('<m:t>', '<w:rPr><w:rFonts w:ascii="Cambria Math" w:hAnsi="Cambria Math"/></w:rPr><m:t>')
+    return latex
 
 class TextSpan(Element):
     '''Object representing text span.'''
@@ -388,12 +393,15 @@ class TextSpan(Element):
                 break
         else:
             if self.is_equation:
-                # 公式的话，从latex -> word-公式
-                latex_to_word = LatexToWordElement(self.text)
+                # 公式的话，从latex -> word/wps 公式
                 try:
-                    latex_to_word.add_latex_to_paragraph(paragraph)
+                    latex_to_word = LatexToWordElement(self.text)
+                    latex_to_word_element = latex_to_word.element()
+                    # 兼容wps
+                    new_omml = to_wps(latex_to_word._omml)
+                    new_etree = etree.fromstring(new_omml)
+                    paragraph._element.append(new_etree)
                 except:
-                    # 可能会报错（transformers.pdf），此时当作文本
                     docx_run = paragraph.add_run(self.text)
             else:
                 # 否则是纯文本
