@@ -208,17 +208,18 @@ class TextBlock(Block):
         row_count = self.row_count
         # 对于较窄的文本，去掉某一边的space（便于编辑）
         width_threshold = 0.5
+        single_line_length = 25 #对于vlm，row count=1，所以加这个逻辑
         # if row_count==1 and self.alignment == TextAlignment.LEFT:
-        if self.alignment == TextAlignment.LEFT and (row_count==1 or self.bbox.width <= (width_threshold * bbox.width)):
+        if self.alignment == TextAlignment.LEFT and ((row_count==1 and len(self.raw_text) < single_line_length) or self.bbox.width <= (width_threshold * bbox.width)):
             # 比较窄的文本，不需要再加入right space了（方便编辑）
             self.right_space = 0
 
         # elif row_count==1 and self.alignment == TextAlignment.RIGHT:
-        elif self.alignment == TextAlignment.RIGHT and (row_count==1 or self.bbox.width <= (width_threshold * bbox.width)):
+        elif self.alignment == TextAlignment.RIGHT and ((row_count==1 and len(self.raw_text) < single_line_length) or self.bbox.width <= (width_threshold * bbox.width)):
             self.left_space = 0
         
         # elif row_count==1 and self.alignment == TextAlignment.CENTER:
-        elif self.alignment == TextAlignment.CENTER and (row_count==1 or self.bbox.width <= (width_threshold * bbox.width)):
+        elif self.alignment == TextAlignment.CENTER and ((row_count==1 and len(self.raw_text) < single_line_length) or self.bbox.width <= (width_threshold * bbox.width)):
             self.left_space = 0
             self.right_space = 0
         
