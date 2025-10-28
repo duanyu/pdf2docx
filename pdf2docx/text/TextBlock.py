@@ -418,10 +418,6 @@ class TextBlock(Block):
         self.left_space  = d_left
         self.right_space = d_right
 
-        # 段落，都认为是左对齐
-        if self.is_paragraph:
-            return TextAlignment.LEFT
-
         # --------------------------------------------------------------------------
         # First priority: 
         # significant distance exists in any two adjacent lines -> set NONE temporarily. 
