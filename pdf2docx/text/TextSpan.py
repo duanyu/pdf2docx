@@ -39,9 +39,9 @@ from ..shape.Shape import Shape
 from latex2word import LatexToWordElement
 from lxml import etree
 
-def to_wps(latex):
+def to_wps(latex, font_size):
     latex = latex.replace('xmlns:mml="http://www.w3.org/1998/Math/MathML"', 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"')
-    latex = latex.replace('<m:t>', '<w:rPr><w:rFonts w:ascii="Cambria Math" w:hAnsi="Cambria Math"/></w:rPr><m:t>')
+    latex = latex.replace('<m:t>', f'<w:rPr><w:rFonts w:ascii="Cambria Math" w:hAnsi="Cambria Math"/><w:sz w:val="{font_size * 2}"/></w:rPr><m:t>')
     return latex
 
 class TextSpan(Element):
@@ -398,7 +398,7 @@ class TextSpan(Element):
                     latex_to_word = LatexToWordElement(self.text)
                     latex_to_word_element = latex_to_word.element()
                     # 兼容wps
-                    new_omml = to_wps(latex_to_word._omml)
+                    new_omml = to_wps(latex_to_word._omml, self.size)
                     new_etree = etree.fromstring(new_omml)
                     paragraph._element.append(new_etree)
                 except:
