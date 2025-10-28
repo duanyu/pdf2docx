@@ -377,7 +377,8 @@ class TextBlock(Block):
             pf.right_indent = Inches(d)
 
         else:
-            pf.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+            # pf.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+            pf.alignment = WD_ALIGN_PARAGRAPH.LEFT
 
         # ------------------------------------
         # add lines
@@ -401,6 +402,7 @@ class TextBlock(Block):
             text_direction_param (tuple): ``(x0_index, x1_index, direction_factor)``, 
                 e.g. ``(0, 2, 1)`` for horizontal text, while ``(3, 1, -1)`` for vertical text.
         '''
+        
         # indexes based on text direction
         idx0, idx1, f = text_direction_param
 
@@ -415,6 +417,10 @@ class TextBlock(Block):
         # NOTE: set horizontal space
         self.left_space  = d_left
         self.right_space = d_right
+
+        # 段落，都认为是左对齐
+        if self.is_paragraph:
+            return TextAlignment.LEFT
 
         # --------------------------------------------------------------------------
         # First priority: 
@@ -445,8 +451,10 @@ class TextBlock(Block):
                 return TextAlignment.RIGHT
         
         if len(rows) == 1: 
-            if self.is_paragraph and self.bbox.width >= 0.7 * bbox.width:
-                # 段落，且较宽
+            # if self.is_paragraph and self.bbox.width >= 0.7 * bbox.width:
+            # 段落，且较宽
+            if self.is_paragraph:
+            # 段落，都认为是左对齐
                 return TextAlignment.LEFT
             return external_alignment()
 

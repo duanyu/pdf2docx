@@ -39,9 +39,13 @@ from ..shape.Shape import Shape
 from latex2word import LatexToWordElement
 from lxml import etree
 
-def to_wps(latex, font_size):
+def to_wps(latex, double_font_size):
     latex = latex.replace('xmlns:mml="http://www.w3.org/1998/Math/MathML"', 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"')
-    latex = latex.replace('<m:t>', f'<w:rPr><w:rFonts w:ascii="Cambria Math" w:hAnsi="Cambria Math"/><w:sz w:val="{font_size * 2}"/></w:rPr><m:t>')
+    # 设置字号、字体，使其在wps中可以呈现
+    latex = latex.replace('<m:t>', f'<w:rPr><w:rFonts w:ascii="Cambria Math" w:hAnsi="Cambria Math"/><w:sz w:val="{double_font_size}"/></w:rPr><m:t>')
+    # 左对齐
+    latex = latex.replace('<m:oMath xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math" xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">', '<m:oMathPara xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math" xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><m:oMathParaPr><m:jc m:val="left"/></m:oMathParaPr><m:oMath>')
+    latex += "</m:oMathPara>"
     return latex
 
 class TextSpan(Element):
@@ -398,9 +402,11 @@ class TextSpan(Element):
                     latex_to_word = LatexToWordElement(self.text)
                     latex_to_word_element = latex_to_word.element()
                     # 兼容wps
-                    new_omml = to_wps(latex_to_word._omml, self.size)
+                    new_omml = to_wps(latex_to_word._omml, math.floor(self.size*2))
+                    # print(new_omml)
                     new_etree = etree.fromstring(new_omml)
                     paragraph._element.append(new_etree)
+                    # print('\n\n')
                 except:
                     docx_run = paragraph.add_run(self.text)
             else:
