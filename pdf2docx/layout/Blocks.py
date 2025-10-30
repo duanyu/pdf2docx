@@ -488,7 +488,8 @@ class Blocks(ElementCollection):
         lines = []  # type: list[Line]
 
         # 按照阅读顺序排序
-        self.sort_in_reading_order_plus()
+        # self.sort_in_reading_order_plus() # 先group same row，对group bbox进行sort，再在group里上到下、左到右
+        self.sort_in_reading_order() # 直接上到下，左到右
 
         def close_text_block(is_paragraph=False):
             if not lines: return
