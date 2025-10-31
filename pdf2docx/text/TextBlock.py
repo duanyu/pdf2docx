@@ -50,6 +50,7 @@ class TextBlock(Block):
         # collect lines
         self.lines = Lines(parent=self).restore(raw.get('lines', []))
 
+        # 是否为vlm的结果
         self.is_paragraph = raw.get('is_paragraph', False)
 
         # set type
@@ -211,7 +212,11 @@ class TextBlock(Block):
         single_line_length = 25 #对于vlm，row count=1，所以加这个逻辑
         # if row_count==1 and self.alignment == TextAlignment.LEFT:
         if self.alignment == TextAlignment.LEFT and ((row_count==1 and len(self.raw_text) < single_line_length) or self.bbox.width <= (width_threshold * bbox.width)):
-            # 比较窄的文本，不需要再加入right space了（方便编辑）
+            # 比较窄的文本，不需要再加入right space了（方便编辑），vlm和pipeline都可以用
+            self.right_space = 0
+            
+        elif self.alignment == TextAlignment.LEFT and self.is_paragraph:
+            # vlm模式下，放弃多栏，全都right space=0
             self.right_space = 0
 
         # elif row_count==1 and self.alignment == TextAlignment.RIGHT:
