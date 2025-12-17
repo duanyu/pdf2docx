@@ -84,8 +84,7 @@ class Cell(Layout):
             'bg_color': self.bg_color,
             'border_color': self.border_color,
             'border_width': self.border_width,
-            'merged_cells': self.merged_cells,
-            'is_default': self.is_default
+            'merged_cells': self.merged_cells
         })
         return res
 
