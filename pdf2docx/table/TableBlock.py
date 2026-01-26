@@ -30,7 +30,6 @@ Data Structure::
     }
 '''
 
-
 from .Row import Row
 from .Rows import Rows
 from ..common.Block import Block

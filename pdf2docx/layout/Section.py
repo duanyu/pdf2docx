@@ -25,6 +25,8 @@ from ..common.docx import set_columns
 from ..common.docx import set_equal_columns
 from ..common.Collection import BaseCollection
 from .Column import Column
+from docx.shared import Pt
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 
 
 class Section(BaseCollection):
@@ -77,7 +79,7 @@ class Section(BaseCollection):
         return self
     
 
-    def make_docx(self, doc):
+    def make_docx(self, doc, after_space=0):
         '''Create section in docx. 
 
         Args:
@@ -90,9 +92,21 @@ class Section(BaseCollection):
 
         # add create each column
         for column in self:
+            # 强行加入新column，布局不稳定，因此去掉。用空格来保证布局。
             # column break to start new column
-            if column != self[0]: 
-                doc.add_section(WD_SECTION.NEW_COLUMN)
-
-            # make doc
+            # if column != self[0]:
+            #     doc.add_section(WD_SECTION.NEW_COLUMN)
+            # make docx
             column.make_docx(doc)
+            if column == self[0] and len(self) == 2 and after_space > 0:
+                enter_num = int(after_space / 10) - 1
+                if enter_num > 0:
+                    p = doc.add_paragraph()
+                    pf = p.paragraph_format
+                    pf.line_spacing = Pt(10)
+                    pf.space_before = Pt(0)
+                    pf.space_after = Pt(0)
+                    pf.alignment = WD_ALIGN_PARAGRAPH.LEFT
+                    run = p.add_run('\n' * enter_num)
+                    run.font.size = Pt(10)
+                    run.font.name = 'Times New Roman'

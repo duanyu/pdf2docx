@@ -48,6 +48,25 @@ def to_wps(latex, double_font_size):
     latex += "</m:oMathPara>"
     return latex
 
+
+def math_italic_to_ascii(text: str) -> str:
+    result = []
+    for ch in text:
+        code = ord(ch)
+
+        # 数学斜体小写 a-z
+        if 0x1D44E <= code <= 0x1D467:
+            result.append(chr(code - 0x1D44E + ord('a')))
+
+        # 数学斜体大写 A-Z
+        elif 0x1D434 <= code <= 0x1D44D:
+            result.append(chr(code - 0x1D434 + ord('A')))
+
+        else:
+            result.append(ch)
+
+    return "".join(result)
+
 class TextSpan(Element):
     '''Object representing text span.'''
     def __init__(self, raw:dict=None):
@@ -91,7 +110,6 @@ class TextSpan(Element):
         if self.chars and 'UNNAMED' in self.font.upper():
             self._change_font_and_update_bbox(constants.DEFAULT_CHINESE_FONT_NAME)
 
-
     @property
     def text(self):
         '''Get span text. Note joining chars is in a higher priority.'''
@@ -111,6 +129,18 @@ class TextSpan(Element):
     @property
     def is_valid_line_height(self): return self.line_height!=-1
 
+
+    def _update_bbox_by_size(self):
+        # 根据font size来调整bbox（有些字母异常高，会影响排版）；只考虑左到右排列文字
+        buff = max((self.line_height - self.size)/2.0, 0.0)
+        x0, y0, x1, y1 = self.bbox
+        y1 = y0+self.size+buff
+
+        self.update_bbox((x0, y0, x1, y1))
+
+        for char in self.chars:
+            x0, _, x1, _ = char.bbox
+            char.update_bbox((x0, y0, x1, y1))
 
     def _change_font_and_update_bbox(self, font_name:str):
         '''Set new font, and update font size, span/char bbox accordingly.
@@ -408,10 +438,10 @@ class TextSpan(Element):
                     paragraph._element.append(new_etree)
                     # print('\n\n')
                 except:
-                    docx_run = paragraph.add_run(self.text)
+                    docx_run = paragraph.add_run(math_italic_to_ascii(self.text))
             else:
-                # 否则是纯文本
-                docx_run = paragraph.add_run(self.text)
+                # 否则是纯文本；加上math italic to ascii的逻辑，防止公式在wps中错误展示
+                docx_run = paragraph.add_run(math_italic_to_ascii(self.text))
 
         # set text style, e.g. font, underline and highlight
         if not self.is_equation:

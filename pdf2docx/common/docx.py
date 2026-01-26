@@ -383,6 +383,83 @@ def indent_table(table, indent:float):
         e.set(qn('w:type'), 'dxa')
         tbl_pr[0].append(e)
 
+def make_table_floating(
+    table,
+    x=0,
+    y=0,
+    x_anchor="page",
+    y_anchor="page",
+    wrap="around"
+):
+    """
+    Make table floating (Word + WPS compatible)
+    """
+
+    tbl = table._element
+    tblPr = tbl.tblPr
+    if tblPr is None:
+        tblPr = OxmlElement("w:tblPr")
+        tbl.insert(0, tblPr)
+
+    # ---- tblpPr ----
+    tblpPr = OxmlElement("w:tblpPr")
+
+    tblpPr.set(qn("w:horzAnchor"), x_anchor)
+    tblpPr.set(qn("w:vertAnchor"), y_anchor)
+    tblpPr.set(qn("w:tblpX"), str(x))
+    tblpPr.set(qn("w:tblpY"), str(y))
+
+    # ---- Word 必需：textWrapping ----
+    textWrapping = OxmlElement("w:textWrapping")
+    textWrapping.set(qn("w:val"), wrap)  # around | none
+    tblpPr.append(textWrapping)
+
+    # ---- spacing from text（Word/WPS 都能接受）----
+    tblpPr.set(qn("w:leftFromText"), "0")
+    tblpPr.set(qn("w:rightFromText"), "0")
+    tblpPr.set(qn("w:topFromText"), "0")
+    tblpPr.set(qn("w:bottomFromText"), "0")
+
+    tblPr.append(tblpPr)
+
+
+def set_cell_width(cell, width_twips):
+    tc = cell._tc
+    tcPr = tc.get_or_add_tcPr()
+    tcW = OxmlElement('w:tcW')
+    tcW.set(qn('w:type'), 'dxa')
+    tcW.set(qn('w:w'), str(width_twips))
+    tcPr.append(tcW)
+
+def set_cell_text_vertical(cell, direction="tbRl"):
+    """
+    direction:
+      - tbRl : 从上到下（最常用）
+      - btLr : 从下到上
+    """
+    tcPr = cell._tc.get_or_add_tcPr()
+
+    text_dir = OxmlElement('w:textDirection')
+    text_dir.set(qn('w:val'), direction)
+
+    tcPr.append(text_dir)
+
+def set_cell_font(cell, font_name=None, font_size_pt=None, color=None):
+    """
+    Set font for all runs in a table cell.
+    """
+    for paragraph in cell.paragraphs:
+        for run in paragraph.runs:
+            if font_name:
+                run.font.name = font_name
+                # 关键：同时设置 rFonts，防止中文不生效
+                run._element.rPr.rFonts.set(qn('w:eastAsia'), font_name)
+
+            if font_size_pt:
+                run.font.size = Pt(font_size_pt)
+
+            if color:
+                run.font.color.rgb = color
 
 def set_cell_margins(cell:_Cell, **kwargs):
     '''Set cell margins. Provided values are in twentieths of a point (1/1440 of an inch).

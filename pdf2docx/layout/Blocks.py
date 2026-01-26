@@ -5,6 +5,7 @@ and a combination of ``Line`` and ``TableBlock`` during parsing process.
 '''
 import json
 import logging
+import time
 
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Pt
@@ -28,6 +29,7 @@ class Blocks(ElementCollection):
         ''' A collection of text based elements, e.g. lines, images or blocks.'''
         super().__init__(instances, parent)
         self._floating_image_blocks = []
+        self._floating_table_blocks = []
         self.is_vlm = False
         self.is_text_center = False
 
@@ -48,6 +50,9 @@ class Blocks(ElementCollection):
     def floating_image_blocks(self):
         return self._floating_image_blocks
 
+    @property
+    def floating_table_blocks(self):
+        return self._floating_table_blocks
 
     @property
     def lattice_table_blocks(self):
@@ -119,7 +124,7 @@ class Blocks(ElementCollection):
         return self
 
 
-    def clean_up(self, float_image_ignorable_gap:float, line_overlap_threshold:float):
+    def clean_up(self, float_image_ignorable_gap:float, line_overlap_threshold:float, parse_arxiv_markup:bool):
         '''Clean up blocks in page level.
 
         * convert to lines
@@ -154,10 +159,16 @@ class Blocks(ElementCollection):
         # delete redundant blanks
         for line in instances: line.strip()
 
-        # detect floating images
-        self.reset(instances) \
-            ._identify_floating_images(float_image_ignorable_gap) \
-            ._remove_overlapped_lines(line_overlap_threshold)
+        # detect floating images & float tables
+        if parse_arxiv_markup:
+            self.reset(instances) \
+                ._identify_floating_images(float_image_ignorable_gap) \
+                ._remove_overlapped_lines(line_overlap_threshold) \
+                ._identify_arxiv_markup()
+        else:
+            self.reset(instances) \
+                ._identify_floating_images(float_image_ignorable_gap) \
+                ._remove_overlapped_lines(line_overlap_threshold)
 
 
     def assign_to_tables(self, tables:list):
@@ -246,9 +257,9 @@ class Blocks(ElementCollection):
             if row.is_flow_layout(line_separate_threshold, cell_layout=cell_layout):
                 close_table()
             elif kwargs.get('list_not_table') and is_list_item(row[0].text):
-                 # Don't interpret list-style bullet characters/numbers as
-                 # indicating a table.
-                 close_table()
+                # Don't interpret list-style bullet characters/numbers as
+                # indicating a table.
+                close_table()
             else:
                 table_lines.extend([sub_line(block) for block in row])
 
@@ -432,7 +443,7 @@ class Blocks(ElementCollection):
         
         # identify floating images
         # for group in filter(lambda group: len(group)>1, groups):
-        for group in groups: # 单个image直接认为是float image
+        for group in groups: # 单个image直接认为是float image；这个是否有问题？todo
             for line in filter(lambda line: line.image_spans, group):
                 float_image = ImageBlock().from_image(line.spans[0])
                 float_image.set_float_image_block()
@@ -442,6 +453,37 @@ class Blocks(ElementCollection):
                 line.update_bbox((0,0,0,0))
 
         return self
+
+
+    def _identify_arxiv_markup(
+        self,
+        left_margin_ratio: float = 0.15
+    ):
+        # 靠左侧，并且是竖排文字，并且不短
+        # page bbox
+        X0, Y0, X1, Y1 = self.parent.bbox
+        page_width = X1 - X0
+
+        for line in self._instances:
+            bx0, by0, bx1, by1 = line.bbox
+
+            # x-position constraint: close to left edge
+            if bx0 - X0 > left_margin_ratio * page_width:
+                continue
+
+            if not line.is_vertical_text:
+                continue
+
+            if (by1-by0) < (0.2 * (Y1-Y0)):
+                # 太短不要
+                continue
+
+            # 后面的都是arxiv markup
+            # 作为float table
+            self._floating_table_blocks.append(line.store())
+
+            # 从后续的layout中去掉
+            line.update_bbox((0, 0, 0, 0))
 
     def _remove_overlapped_lines(self, line_overlap_threshold:float):
         '''Delete overlapped lines. 

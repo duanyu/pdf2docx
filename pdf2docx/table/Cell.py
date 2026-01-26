@@ -1,5 +1,4 @@
 '''Table Cell object.'''
-
 from docx.shared import Pt
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
@@ -103,7 +102,8 @@ class Cell(Layout):
             indexes (tuple): Row and column indexes, ``(i, j)``.
         '''
         # set cell style, e.g. border, shading, cell width
-        self._set_style(table, indexes)
+        # make cell加速，节省docx_cell的反复读取
+        docx_cell = self._set_style(table, indexes)
 
         # ignore merged cells
         if not bool(self):  return
@@ -111,7 +111,8 @@ class Cell(Layout):
         # merge cells
         n_row, n_col = self.merged_cells
         i, j = indexes
-        docx_cell = table.cell(i, j)
+        # 节省反复读取
+        # docx_cell = table.cell(i, j)
         if n_row*n_col != 1 and ((i+n_row-1) * table._column_count + j+n_col-1) < len(table._cells): # check whether index is over length of cells
             _cell = table.cell(i+n_row-1, j+n_col-1)
             try:
@@ -155,6 +156,7 @@ class Cell(Layout):
             indexes (tuple): ``(i, j)`` index of current cell in table.
         '''
         i, j = indexes
+        # 省不掉的一次查找时间
         docx_cell = table.cell(i, j)
         n_row, n_col = self.merged_cells
 
@@ -169,16 +171,22 @@ class Cell(Layout):
             # skip if width=0 -> will not show in docx
             if not w: continue
 
+            # 尽管计算不必要，但很快
             hex_c = f'#{hex(c)[2:].zfill(6)}'
             kwargs[k] = {
                 'sz': 8*w, 'val': 'single', 'color': hex_c.upper()
             }
 
         # merged cells are assumed to have same borders with the main cell
-        for m in range(i, i+n_row):
-            for n in range(j, j+n_col):
-                if len(table._cells) > m * table._column_count + n: # check whether index is over length of cells
-                    docx.set_cell_border(table.cell(m, n), **kwargs)
+        if n_row == 1 and n_col == 1:
+            # make cell 加速，直接不用再取
+            docx.set_cell_border(docx_cell, **kwargs)
+        else:
+            for m in range(i, i+n_row):
+                for n in range(j, j+n_col):
+                    if len(table._cells) > m * table._column_count + n: # check whether index is over length of cells
+                        docx.set_cell_border(table.cell(m, n), **kwargs)
+
 
         # ---------------------
         # cell bg-color
@@ -196,3 +204,5 @@ class Cell(Layout):
         # set vertical direction if contained text blocks are in vertical direction
         if self.blocks.is_vertical_text:
             docx.set_vertical_cell_direction(docx_cell)
+
+        return docx_cell

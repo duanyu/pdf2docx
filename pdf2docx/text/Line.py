@@ -13,7 +13,7 @@ Data structure of line in text block referring to this
         'spans': [ spans ]
     }
 '''
-
+import fitz
 from fitz import Point
 try:
     # Python <= 3.9
@@ -54,9 +54,8 @@ class Line(Element):
         super().__init__(raw)
 
         # collect spans
-        self.spans = Spans(parent=self).restore(raw.get('spans', []))        
+        self.spans = Spans(parent=self).restore(raw.get('spans', []), self.text_direction)
 
-    
     def set_paragraph(self):
         self.is_paragraph = True
 

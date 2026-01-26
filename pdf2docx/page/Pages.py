@@ -3,7 +3,6 @@
 '''Collection of :py:class:`~pdf2docx.page.Page` instances.'''
 
 import logging
-
 from .RawPageFactory import RawPageFactory
 from ..common.Collection import BaseCollection
 from ..font.Fonts import Fonts
@@ -51,6 +50,7 @@ class Pages(BaseCollection):
             page.width = raw_page.width
             page.height = raw_page.height
             page.float_images.reset().extend(raw_page.blocks.floating_image_blocks)
+            page.float_tables.reset().extend(raw_page.blocks.floating_table_blocks)
 
             raw_pages.append(raw_page)
             pages.append(page)

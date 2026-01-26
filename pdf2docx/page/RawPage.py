@@ -6,7 +6,7 @@
 * parse page structure roughly, i.e. section and column
 '''
 
-import json, fitz, re
+import json, fitz, re, time
 from abc import (ABC, abstractmethod)
 from .BasePage import BasePage
 from ..layout.Section import Section
@@ -19,6 +19,7 @@ from ..text.TextSpan import TextSpan
 from ..common.share import debug_plot
 from ..common import constants
 from ..common.Collection import Collection
+from ..common.share import TextDirection
 from importlib import resources
 from fontTools.ttLib import TTFont
 
@@ -51,6 +52,8 @@ dengxian_line_height_ratio = 1.432
 # arial_path = str(resources.files(root_pkg).joinpath("fonts/Arial.ttf"))
 # arial_line_height_ratio = Fonts.get_line_height_factor(TTFont(arial_path))
 arial_line_height_ratio = 1.15
+
+center_fuzzy_ratio = 0.1  # 距离中线多少比例认为是双栏（允许的误差范围）
 
 class RawPage(BasePage, ABC):
     '''A wrapper of page engine.'''
@@ -112,7 +115,8 @@ class RawPage(BasePage, ABC):
         # clean up blocks first
         self.blocks.clean_up(
             settings['float_image_ignorable_gap'],
-            settings['line_overlap_threshold'])
+            settings['line_overlap_threshold'],
+            settings.get('parse_arxiv_markup', False))
         # clean up shapes
         self.shapes.clean_up(
             settings['max_border_width'],
@@ -126,16 +130,9 @@ class RawPage(BasePage, ABC):
         Args:
             fonts (Fonts): Fonts parsed by ``fonttools``.
         '''
-        # 定义允许的字符集
-        letters_digits = "A-Za-z0-9"
-        spaces = r"\s"  # 包含空格、Tab、换行等
-        punctuation = r""".,;:!?'"()\[\]{}\/\\@#$%&*\+=_\-~`<>|"""  # 常见英文标点
 
-        # 拼接正则
-        allowed_chars = f"[{letters_digits}{spaces}{punctuation}]+"
-
-        # 编译 pattern
-        eng_pattern = re.compile(f"^{allowed_chars}$")
+        def has_chinese(text):
+            return bool(re.search(r'[\u4e00-\u9fff]', text))
 
         # get all text span
         spans = []
@@ -147,13 +144,13 @@ class RawPage(BasePage, ABC):
             font = fonts.get(span.font)
             if not font:
                 # 没有font的，给个默认字体
-                # 对于字母和数字，给new roman；其他，给simsun
-                if eng_pattern.match(span.text):
-                    span.font = 'Times New Roman'
-                    span.line_height = times_new_roman_line_height_ratio * span.size
-                else:
+                # 对于中文用宋体，其他用times new roman
+                if has_chinese(span.text):
                     span.font = 'SimSun'
                     span.line_height = simsun_line_height_ratio * span.size
+                else:
+                    span.font = 'Times New Roman'
+                    span.line_height = times_new_roman_line_height_ratio * span.size
             else:
                 # 对font提取结果也要做个处理（很多解析出来的name，无法直接用在word/wps中，这会导致默认字体的排版不符合要求）
                 # update font properties with font parsed by fonttools
@@ -173,7 +170,7 @@ class RawPage(BasePage, ABC):
                     span.font = "DengXian"
                     span.line_height = dengxian_line_height_ratio * span.size
                 elif 'fangsong' in lower_extracted_font_name or 'fzfs' in lower_extracted_font_name:
-                    # 仿宋
+                    # 仿宋；wps的行距会偏大
                     span.font = "FangSong"
                     span.line_height = fangsong_line_height_ratio * span.size
                 elif 'song' in lower_extracted_font_name or 'simsun' in lower_extracted_font_name or 'st' in lower_extracted_font_name:
@@ -193,13 +190,12 @@ class RawPage(BasePage, ABC):
                     span.font = "KaiTi"
                     span.line_height = 1.3 * span.size
                 else:
-                    if eng_pattern.match(span.text):
-                        span.font = 'Times New Roman'
-                        span.line_height = times_new_roman_line_height_ratio * span.size
-                    else:
+                    if has_chinese(span.text):
                         span.font = 'SimSun'
                         span.line_height = simsun_line_height_ratio * span.size
-
+                    else:
+                        span.font = 'Times New Roman'
+                        span.line_height = times_new_roman_line_height_ratio * span.size
 
     def calculate_margin(self, **settings):
         """Calculate page margin.
@@ -278,12 +274,105 @@ class RawPage(BasePage, ABC):
             cols = row.group_by_columns()
             current_num_col = len(cols)
 
+            # print('current_num_col:', current_num_col)
+            # for col_i, col in enumerate(cols):
+            #     for _col_i, _col in enumerate(col.store()):
+            #         for _span_i, _span in enumerate(_col.get('spans', {})):
+            #             print(f"col-{col_i}-{_col_i}, span-{_span_i}: {_span.get('text')}: {_span}")
+            # print()
+
+            # 修正cols；如果有两个col的中间位置大概在页面中间，这说明是双栏，把中间左边的、中间右边的分为两栏；只能对比不同col的内容
+            if current_num_col == 2:
+                # 2 col也需要判断是否符合要求
+                split_col_i = -1
+                center_col_margin = 0.0
+                col_margin_list = []
+                has_wide_col = any([((col.bbox[2] - col.bbox[0]) / X1) > 0.3 for col in cols])  # 是否有一个col很宽（很可能是正文）
+                # 判断是否为双栏布局（col的中点在页面中间）
+                for col_i in range(len(cols) - 1):
+                    next_x0 = cols[col_i + 1].bbox[0]
+                    this_x1 = cols[col_i].bbox[2]
+                    col_margin_list.append(next_x0 - this_x1)
+                    page_center = (X1 + X0) / 2
+                    this_next_col_center_ratio = ((this_x1 + next_x0) / 2) / page_center
+                    if (1 - center_fuzzy_ratio) <= this_next_col_center_ratio <= (
+                            1 + center_fuzzy_ratio) and next_x0 > this_x1 and split_col_i < 0:
+                        split_col_i = col_i
+                        center_col_margin = next_x0 - this_x1
+                if split_col_i >= 0 and has_wide_col and center_col_margin > 3:
+                    # 符合要求，确实为双栏
+                    pass
+                else:
+                    # 否则为单栏
+                    current_num_col = 1
+            elif current_num_col > 2:
+                # print('current_num_col before:', current_num_col)
+                flat_cols = []
+                for col_index, col_list in enumerate(cols):
+                    for col in col_list:
+                        flat_cols.append(col)
+
+                split_col_i = -1
+                center_col_margin = 0.0
+                col_margin_list = []
+                has_wide_col = any([((col.bbox[2]-col.bbox[0])/X1) > 0.3 for col in cols]) # 是否有一个col很宽（很可能是正文）
+                # 判断是否为双栏布局（col的中点在页面中间）
+                for col_i in range(len(cols) - 1):
+                    next_x0 = cols[col_i + 1].bbox[0]
+                    this_x1 = cols[col_i].bbox[2]
+                    col_margin_list.append(next_x0-this_x1)
+                    page_center = (X1 + X0) / 2
+                    this_next_col_center_ratio = ((this_x1 + next_x0) / 2) / page_center
+                    if (1-center_fuzzy_ratio) <= this_next_col_center_ratio <= (1+center_fuzzy_ratio) and next_x0 > this_x1 and split_col_i < 0:
+                        split_col_i = col_i
+                        center_col_margin = next_x0-this_x1
+                if split_col_i >= 0 and has_wide_col and center_col_margin > 3:
+                    col1 = Collection()
+                    col2 = Collection()
+                    for col_i in range(len(cols)):
+                        if col_i <= split_col_i:
+                            col1.extend(cols[col_i])
+                        else:
+                            col2.extend(cols[col_i])
+
+                    cols = [col1, col2]
+                    current_num_col = 2
+
+                if current_num_col > 2:
+                    # 额外处理左侧为小节标题的情况
+                    if has_wide_col and hasattr(cols[0][0], "text") and len(cols[0][0].text.strip()) > 0 and cols[0][0].text.strip()[0] in ['1', '2', '3', '4', '5', '6', '7', '8', '9']:
+                        first_col = Collection()
+                        second_col = Collection()
+                        for col in flat_cols:
+                            if col.bbox[0] < 0.5 * X1:
+                                # 左侧
+                                first_col.append(col)
+                            else:
+                                second_col.append(col)
+                        cols = [first_col, second_col]
+                        current_num_col = 2
+
+                    # print('current num col仍然大于2！')
+                    # print(cols[0][0].store())
+                    # print(cols[0][0].text)
+
+                # print('current_num_col after:', current_num_col)
+
+                    # print('【修正后】')
+                    # print('current_num_col:', current_num_col)
+                    # for col_i, col in enumerate(cols):
+                    #     for _col_i, _col in enumerate(col.store()):
+                    #         for _span_i, _span in enumerate(_col.get('spans', {})):
+                    #             print(f"col-{col_i}-{_col_i}, span-{_span_i}: {_span.get('text')}: {_col}")
+                    # print()
+
             # column check:
             # consider 2-cols only
             if current_num_col>2:
                 current_num_col = 1
 
             # the width of two columns shouldn't have significant difference
+            # 避免table被误判
             elif current_num_col==2:
                 u0, v0, u1, v1 = cols[0].bbox
                 m0, n0, m1, n1 = cols[1].bbox
@@ -292,7 +381,13 @@ class RawPage(BasePage, ABC):
                 w1, w2 = u1-u0, m1-m0 # line width
                 f = 2.0
                 if not 1/f<=c1/c2<=f or w1/c1<0.33 or w2/c2<0.33:
-                    current_num_col = 1
+                    if hasattr(cols[0][0], "text") and len(cols[0][0].text.strip()) > 0 and (cols[0][0].text.strip()[0] in ['1', '2', '3', '4', '5', '6', '7', '8', '9'] or cols[0][0].text.strip() in ['Abstract', 'Acknowledgements', 'References']):
+                        # 小节标题、Abstract忽略
+                        pass
+                    elif hasattr(cols[1][0], "text") and len(cols[1][0].text.strip()) > 0 and cols[1][0].text.strip()[0] in ['1', '2', '3', '4', '5', '6', '7', '8', '9']:
+                        pass
+                    else:
+                        current_num_col = 1
 
             # process exceptions
             if pre_num_col==2 and current_num_col==1:
@@ -336,6 +431,14 @@ class RawPage(BasePage, ABC):
         # don't forget the final section
         close_section(current_num_col, lines, y_ref)
 
+        # print('sections:')
+        # for sec_i, section in enumerate(sections):
+        #     for col_i, col in enumerate(section.store()['columns']):
+        #         for block_i, block in enumerate(col.get('blocks', [])):
+        #             for span_i, span in enumerate(block.get('spans', [])):
+        #                 print(f"sec-{sec_i}, col-{col_i}, block-{block_i}, span-{span_i}: {span.get('text')}")
+        #     print()
+
         return sections
 
 
@@ -355,8 +458,34 @@ class RawPage(BasePage, ABC):
             before_space = y0 - y_ref
         else:
             cols = elements.group_by_columns()
-            u0, v0, u1, v1 = cols[0].bbox
-            m0, n0, m1, n1 = cols[1].bbox
+            # print('create section:')
+            # for col in cols:
+            #     print(col.store())
+            split_col_i = -1
+            # 这里也要考虑到多col的情况，把中点两边的分为两个col
+            for col_i in range(len(cols)-1):
+                next_x0 = cols[col_i + 1].bbox[0]
+                this_x1 = cols[col_i].bbox[2]
+                page_center = (X1 + X0) / 2
+                this_next_col_center_ratio = ((this_x1 + next_x0) / 2) / page_center
+                if (1-center_fuzzy_ratio) <= this_next_col_center_ratio <= (1+center_fuzzy_ratio) and next_x0 > this_x1:
+                    split_col_i = col_i
+
+            if split_col_i >= 0:
+                col1 = Collection()
+                col2 = Collection()
+                for col_i in range(len(cols)):
+                    if col_i <= split_col_i:
+                        col1.extend(cols[col_i])
+                    else:
+                        col2.extend(cols[col_i])
+                u0, v0, u1, v1 = col1.bbox
+                m0, n0, m1, n1 = col2.bbox
+            else:
+                # print('split col i < 0')
+                # print('col num', len(cols))
+                u0, v0, u1, v1 = cols[0].bbox
+                m0, n0, m1, n1 = cols[1].bbox
             u = (u1+m0)/2.0
 
             column_1 = Column().update_bbox((X0, v0, u, v1))
@@ -366,6 +495,8 @@ class RawPage(BasePage, ABC):
             column_2.add_elements(elements)
 
             section = Section(space=0, columns=[column_1, column_2])
+            # print('column1:', column_1.store())
+            # print('column2:', column_2.store())
             before_space = v0 - y_ref
 
         section.before_space = round(before_space, 1)

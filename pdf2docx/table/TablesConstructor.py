@@ -19,7 +19,6 @@ Terms definition:
   and finally applied to detect table border.
 '''
 import json
-
 from ..common import constants
 from ..common.Element import Element
 from ..common.Collection import Collection
@@ -121,7 +120,7 @@ class TablesConstructor:
         table_fillings = self._shapes.table_fillings
 
         # lines in potential stream tables
-        tables_lines = self._blocks.collect_stream_lines(table_fillings, line_separate_threshold)            
+        tables_lines = self._blocks.collect_stream_lines(table_fillings, line_separate_threshold)
 
         # define a function to get the vertical boundaries of given table
         X0, Y0, X1, Y1 = self._parent.bbox
@@ -200,6 +199,10 @@ class TablesConstructor:
             # Generally, a 1x1 stream table nested in a table cell is of no use
             if isinstance(self._parent, Cell) and \
                 table.num_cols*table.num_rows==1 and table[0][0].bg_color is None:
+                continue
+
+            # 过滤掉仅有一行的table，很有可能是误识别
+            if table.num_rows <= 2:
                 continue
 
             table.set_stream_table_block()

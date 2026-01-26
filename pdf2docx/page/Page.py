@@ -92,6 +92,9 @@ class Page(BasePage):
         # floating images are separate node under page
         self.float_images = float_images or BaseCollection()
 
+        # floating tables（水印）
+        self.float_tables = BaseCollection() # 一段水印文字当作一个表格
+
         self._finalized = False
 
 
