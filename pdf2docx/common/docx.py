@@ -264,7 +264,7 @@ def add_hyperlink(paragraph, url, text):
 # ---------------------------------------------------------
 def add_image(p, image_path_or_stream, width, height):
     ''' Add image to paragraph.
-    
+
     Args:
         p (Paragraph): ``python-docx`` paragraph instance.
         image_path_or_stream (str, bytes): Image path or stream.
@@ -277,7 +277,7 @@ def add_image(p, image_path_or_stream, width, height):
     except UnrecognizedImageError:
         print('Unrecognized Image.')
         return
-    
+
     # exactly line spacing will destroy image display, so set single line spacing instead
     p.paragraph_format.line_spacing = 1.00
 

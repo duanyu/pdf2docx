@@ -62,6 +62,14 @@ def math_italic_to_ascii(text: str) -> str:
         elif 0x1D434 <= code <= 0x1D44D:
             result.append(chr(code - 0x1D434 + ord('A')))
 
+        # 数学斜体小写希腊字母
+        elif 0x1D6FC <= code <= 0x1D715:
+            result.append(chr(code - 0x1D6FC + 0x03B1))  # α 起始
+
+        # 数学斜体大写希腊字母
+        elif 0x1D6E2 <= code <= 0x1D6FB:
+            result.append(chr(code - 0x1D6E2 + 0x0391))  # Α 起始
+
         else:
             result.append(ch)
 

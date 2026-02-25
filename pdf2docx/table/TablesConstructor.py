@@ -201,9 +201,9 @@ class TablesConstructor:
                 table.num_cols*table.num_rows==1 and table[0][0].bg_color is None:
                 continue
 
-            # 过滤掉仅有一行的table，很有可能是误识别
-            if table.num_rows <= 2:
-                continue
+            # # 过滤掉仅有一行的table，很有可能是误识别
+            # if table.num_rows <= 2:
+            #     continue
 
             table.set_stream_table_block()
             tables.append(table)

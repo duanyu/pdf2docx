@@ -148,7 +148,9 @@ class Sections(BaseCollection):
         # create floating images
         # ---------------------------------------------------
         # lazy: assign all float images to first paragraph of current page
+        # 这里导致即使赋予按照paragraph relative，还是只根据第一个paragraph来调整布局。应该改为按照上下顺序，放到其上面那一段下面。
         for image in self.parent.float_images:
+            # print('have float image!')
             image.make_docx(doc.paragraphs[n])
 
 

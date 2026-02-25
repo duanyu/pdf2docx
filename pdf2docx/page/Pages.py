@@ -2,7 +2,7 @@
 
 '''Collection of :py:class:`~pdf2docx.page.Page` instances.'''
 
-import logging
+import logging, time
 from .RawPageFactory import RawPageFactory
 from ..common.Collection import BaseCollection
 from ..font.Fonts import Fonts

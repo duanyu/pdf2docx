@@ -124,7 +124,7 @@ class Blocks(ElementCollection):
         return self
 
 
-    def clean_up(self, float_image_ignorable_gap:float, line_overlap_threshold:float, parse_arxiv_markup:bool):
+    def clean_up(self, float_image_ignorable_gap:float, line_overlap_threshold:float, parse_arxiv_markup:bool, single_group_as_float:bool):
         '''Clean up blocks in page level.
 
         * convert to lines
@@ -162,12 +162,12 @@ class Blocks(ElementCollection):
         # detect floating images & float tables
         if parse_arxiv_markup:
             self.reset(instances) \
-                ._identify_floating_images(float_image_ignorable_gap) \
+                ._identify_floating_images(float_image_ignorable_gap, single_group_as_float) \
                 ._remove_overlapped_lines(line_overlap_threshold) \
                 ._identify_arxiv_markup()
         else:
             self.reset(instances) \
-                ._identify_floating_images(float_image_ignorable_gap) \
+                ._identify_floating_images(float_image_ignorable_gap, single_group_as_float) \
                 ._remove_overlapped_lines(line_overlap_threshold)
 
 
@@ -192,7 +192,35 @@ class Blocks(ElementCollection):
             # no contents for this table
             if not blocks_in_table: continue
             table.assign_blocks(blocks_in_table)
-            tables_have_blocks.append(table)
+
+            if table._type == BlockType.STREAM_TABLE:
+                # 这段代码为了防止stream table误判
+                have_image_block = False
+                for l in blocks_in_table:
+                    if isinstance(l, Line) and l.image_spans:
+                        have_image_block = True
+                        break
+
+                have_table_cell = False
+                if table.num_rows <= 2 and not have_image_block:
+                    # 没有image block的、row数量少的stream table，很可能是误识别
+                    for row in table._rows:
+                        for cell in row:
+                            if isinstance(cell, TableBlock):
+                                have_table_cell = True
+                                break
+                        if have_table_cell:
+                            break
+                    if not have_table_cell:
+                        for row in table._rows:
+                            for cell in row:
+                                blocks.extend(cell.blocks)
+                    else:
+                        tables_have_blocks.append(table)
+                else:
+                    tables_have_blocks.append(table)
+            else:
+                tables_have_blocks.append(table)
 
         # sort in natural reading order and update layout blocks
         # blocks.extend(tables)
@@ -436,21 +464,30 @@ class Blocks(ElementCollection):
     # ----------------------------------------------------------------------------------
     # internal methods
     # ----------------------------------------------------------------------------------
-    def _identify_floating_images(self, float_image_ignorable_gap:float):
+    def _identify_floating_images(self, float_image_ignorable_gap:float, single_group_as_float:bool):
         '''Identify floating image lines and convert to ImageBlock.'''
         # group lines by connectivity
         groups = self.group_by_connectivity(dx=-float_image_ignorable_gap, dy=-float_image_ignorable_gap)
         
         # identify floating images
-        # for group in filter(lambda group: len(group)>1, groups):
-        for group in groups: # 单个image直接认为是float image；这个是否有问题？todo
-            for line in filter(lambda line: line.image_spans, group):
-                float_image = ImageBlock().from_image(line.spans[0])
-                float_image.set_float_image_block()
-                self._floating_image_blocks.append(float_image)
+        if single_group_as_float:
+            for group in groups:  # 单个image（和line没有交叉）直接认为是float image；这个是否有问题？todo
+                for line in filter(lambda line: line.image_spans, group):
+                    float_image = ImageBlock().from_image(line.spans[0])
+                    float_image.set_float_image_block()
+                    self._floating_image_blocks.append(float_image)
 
-                # remove the original image line from flow layout by setting empty bbox
-                line.update_bbox((0,0,0,0))
+                    # remove the original image line from flow layout by setting empty bbox
+                    line.update_bbox((0, 0, 0, 0))
+        else:
+            for group in filter(lambda group: len(group)>1, groups):
+                for line in filter(lambda line: line.image_spans, group):
+                    float_image = ImageBlock().from_image(line.spans[0])
+                    float_image.set_float_image_block()
+                    self._floating_image_blocks.append(float_image)
+
+                    # remove the original image line from flow layout by setting empty bbox
+                    line.update_bbox((0,0,0,0))
 
         return self
 
