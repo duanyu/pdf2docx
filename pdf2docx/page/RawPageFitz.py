@@ -101,12 +101,13 @@ class RawPageFitz(RawPage):
             intersected = False
             for line in block['lines']:
                 for span in line['spans']:
-                    for filter_span in filtered_spans:
-                        intersected_area = get_area(span['bbox'], filter_span['bbox'])
-                        if intersected_area / span_area(span['bbox']) >= FACTOR_A_HALF \
-                            and span['font']==filter_span['font']:
-                            intersected = True
-                            break
+                    if span_area(span['bbox']) > 0:
+                        for filter_span in filtered_spans:
+                            intersected_area = get_area(span['bbox'], filter_span['bbox'])
+                            if intersected_area / span_area(span['bbox']) >= FACTOR_A_HALF \
+                                and span['font']==filter_span['font']:
+                                intersected = True
+                                break
                     if intersected: break # skip further span check if found
                 if intersected: break     # skip further line check
 
