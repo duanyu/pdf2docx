@@ -238,6 +238,7 @@ class RawPage(BasePage, ABC):
         """
         1. 对所有 image block，用 Union-Find 将有交叉的合并为一个大的 image bbox
         2. 将与合并后 image bbox 有足够重叠的 text block 吸收进来（迭代扩大 bbox）
+           同时迭代检查组间是否因扩大而产生交叉，若有则合并组
         3. 生成新的 image block，替换被合并的旧 blocks
         """
 
@@ -252,14 +253,12 @@ class RawPage(BasePage, ABC):
             x1 = min(b1[2], b2[2])
             y1 = min(b1[3], b2[3])
 
-            gap_x = x0 - x1  # 水平间距（>0 表示不重叠）
-            gap_y = y0 - y1  # 垂直间距（>0 表示不重叠）
+            gap_x = x0 - x1
+            gap_y = y0 - y1
 
             if gap_x > threshold or gap_y > threshold:
                 return None
 
-            # 确保返回的 bbox 面积不为 0
-            # 当不重叠时，制造一个最小为 1 像素的交集
             x0 = min(x0, x1)
             y0 = min(y0, y1)
             x1 = max(x1, x0 + 1)
@@ -289,6 +288,7 @@ class RawPage(BasePage, ABC):
         image_blocks = [b for b in self.blocks if b.store().get("type") == 1]
 
         if not image_blocks:
+            # 没有image的直接不需要走后续的逻辑
             return
 
         for b in image_blocks:
@@ -313,16 +313,42 @@ class RawPage(BasePage, ABC):
                 merged = union_bbox(merged, m.bbox)
             group_bboxes[root] = merged
 
-        # ======== Phase 2: 迭代吸收与 image bbox 有足够重叠的 text blocks ========
-        text_blocks = [b for b in self.blocks if b.store().get("type") != 1]
+        # ======== Phase 2: 迭代吸收 text blocks + 合并重叠的组 ========
+        # ★ 修复点3: 排除已分组的 image blocks，组间合并由 Sub-step A 处理
+        image_block_set = set(image_blocks)
+        text_blocks = [b for b in self.blocks if b not in image_block_set]
 
         removed_text_blocks = set()
-        group_text_members = defaultdict(list)  # root -> [text_block, ...]
+        group_text_members = defaultdict(list)
 
         # 迭代：合并 text block 会扩大 bbox，可能覆盖更多 text block
         changed = True
         while changed:
             changed = False
+
+            # ★ 修复点1 (Sub-step A): 检查任意两组是否因 bbox 扩大而重叠，有则合并
+            roots = list(group_bboxes.keys())
+            for i in range(len(roots)):
+                if changed:
+                    break
+                for j in range(i + 1, len(roots)):
+                    ri, rj = roots[i], roots[j]
+                    if ri not in group_bboxes or rj not in group_bboxes:
+                        continue
+                    if intersect(group_bboxes[ri], group_bboxes[rj], threshold=intersect_threshold):
+                        # 合并 rj 到 ri
+                        group_bboxes[ri] = union_bbox(group_bboxes[ri], group_bboxes[rj])
+                        groups[ri].extend(groups.pop(rj))
+                        del group_bboxes[rj]
+                        if rj in group_text_members:
+                            group_text_members[ri].extend(group_text_members.pop(rj))
+                        changed = True
+                        break
+
+            if changed:
+                continue  # 组合并后 bbox 再次扩大，需要重头检查
+
+            # Sub-step B: 吸收与组 bbox 有足够重叠的 text blocks
             for tb in text_blocks:
                 if tb in removed_text_blocks:
                     continue
@@ -348,6 +374,9 @@ class RawPage(BasePage, ABC):
                             group_text_members[root].append(tb)
                             changed = True
                             break  # bbox 已变化，重新开始迭代
+                # ★ 修复点2: 外层循环也要 break，确保立即回到 while 重新检查组间重叠
+                if changed:
+                    break
 
         # ======== Phase 3: 为发生合并的组生成新的 image block ========
         new_blocks = []
