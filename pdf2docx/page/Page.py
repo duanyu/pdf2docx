@@ -46,6 +46,7 @@ from ..common.share import debug_plot
 from .BasePage import BasePage
 from ..layout.Sections import Sections
 from ..image.ImageBlock import ImageBlock
+from ..table.TableBlock import TableBlock
 
 
 class Page(BasePage):
@@ -112,7 +113,8 @@ class Page(BasePage):
             'sections': self.sections.store(),
             'header'  : self.header,
             'footer'  : self.footer,
-            'floats'  : self.float_images.store()
+            'floats'  : self.float_images.store(),
+            'float_tables': self.float_tables.store()
         }
         return res
 
@@ -134,6 +136,9 @@ class Page(BasePage):
 
         # float images
         self._restore_float_images(data.get('floats', []))
+
+        # float tables【保证multi processing效果对齐】
+        self._restore_float_tables(data.get('float_tables', []))
 
         # Suppose layout is finalized when restored; otherwise, set False explicitly
         # out of this method.
@@ -212,3 +217,11 @@ class Page(BasePage):
             image = ImageBlock(raw)
             image.set_float_image_block()
             self.float_images.append(image)
+
+
+    def _restore_float_tables(self, raws:list):
+        '''Restore float tables.'''
+        self.float_tables.reset()
+        for raw in raws:
+            table = TableBlock(raw)
+            self.float_tables.append(table)
