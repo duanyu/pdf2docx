@@ -114,7 +114,7 @@ class Page(BasePage):
             'header'  : self.header,
             'footer'  : self.footer,
             'floats'  : self.float_images.store(),
-            'float_tables': self.float_tables.store()
+            'float_tables': list(self.float_tables)
         }
         return res
 
@@ -223,5 +223,4 @@ class Page(BasePage):
         '''Restore float tables.'''
         self.float_tables.reset()
         for raw in raws:
-            table = TableBlock(raw)
-            self.float_tables.append(table)
+            self.float_tables.append(raw)
