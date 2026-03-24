@@ -114,7 +114,7 @@ class Page(BasePage):
             'header'  : self.header,
             'footer'  : self.footer,
             'floats'  : self.float_images.store(),
-            'float_tables': list(self.float_tables)
+            # 'float_tables': list(self.float_tables) # multiprocessing时忽略arxiv（翻译之后线上转pdf效果不行）
         }
         return res
 
