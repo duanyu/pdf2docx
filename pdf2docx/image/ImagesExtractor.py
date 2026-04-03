@@ -261,8 +261,12 @@ class ImagesExtractor:
         Returns:
             dict: Raw dict of the pixmap.
         """
-        if image.colorspace.n > 3:  # must convert: we only support PNG
-            image = fitz.Pixmap(fitz.csRGB, image)
+        try:
+            # 防止报错，有时候image.colorspace为None
+            if image.colorspace.n > 3:  # must convert: we only support PNG
+                image = fitz.Pixmap(fitz.csRGB, image)
+        except:
+            pass
 
         image_result = ""
         try:
