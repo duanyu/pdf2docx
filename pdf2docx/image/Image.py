@@ -23,6 +23,50 @@ from io import BytesIO
 from ..common import docx
 from ..common.Element import Element
 
+import io
+# 修改点 1：使用 as 给 PIL 的 Image 起个专属别名，防止与其他库冲突
+from PIL import Image as PILImage
+
+
+def compress_image_bytes(img_bytes, size_threshold_mb=2, max_dimension=1920, jpeg_quality=70):
+    size_bytes = len(img_bytes)
+    threshold_bytes = size_threshold_mb * 1024 * 1024
+
+    if size_bytes < threshold_bytes:
+        return img_bytes
+
+    try:
+        # 修改点 2：使用 PILImage 代替 Image
+        img = PILImage.open(io.BytesIO(img_bytes))
+
+        if img.mode in ('RGBA', 'LA', 'P'):
+            # 修改点 3：全部替换为 PILImage
+            background = PILImage.new('RGB', img.size, (255, 255, 255))
+            if img.mode == 'P':
+                img = img.convert('RGBA')
+            background.paste(img, mask=img.split()[3] if len(img.split()) >= 4 else None)
+            img = background
+        elif img.mode != 'RGB':
+            img = img.convert('RGB')
+
+        if img.width > max_dimension or img.height > max_dimension:
+            # 修改点 4：全部替换为 PILImage
+            img.thumbnail((max_dimension, max_dimension), PILImage.Resampling.LANCZOS)
+
+        output_io = io.BytesIO()
+        img.save(output_io, format='JPEG', quality=jpeg_quality, optimize=True)
+        # img.save(output_io, format='PNG', quality=jpeg_quality, optimize=True)
+
+        compressed_bytes = output_io.getvalue()
+
+        if len(compressed_bytes) < size_bytes:
+            return compressed_bytes
+        else:
+            return img_bytes
+
+    except Exception as e:
+        print(f"Warning: Image compression failed - {e}")
+        return img_bytes
 
 class Image(Element):
     '''Base image object.'''
@@ -91,4 +135,11 @@ class Image(Element):
     def make_docx(self, paragraph):
         '''Add image span to a docx paragraph.'''
         # add image
+        # print('原image大小:', len(self.image)/(1024*1024))
+        self.image = compress_image_bytes(
+            self.image,
+            size_threshold_mb=1,
+            jpeg_quality=90,
+        )
+        # print('压缩后image大小:', len(self.image) / (1024 * 1024))
         docx.add_image(paragraph, BytesIO(self.image), self.bbox.x1-self.bbox.x0, self.bbox.y1-self.bbox.y0)
