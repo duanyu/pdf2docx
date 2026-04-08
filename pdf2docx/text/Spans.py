@@ -18,7 +18,7 @@ class Spans(ElementCollection):
                 span = ImageSpan(raw_span)
             else:
                 span = TextSpan(raw_span)
-                if text_direction == TextDirection.LEFT_RIGHT and span.chars and (span.bbox.height / span.size) > 1.5:
+                if span.size > 0 and text_direction == TextDirection.LEFT_RIGHT and span.chars and (span.bbox.height / span.size) > 1.5:
                     # 处理左右排列的，异常高的，调整其bbox
                     span._update_bbox_by_size()
                 if not span.text.strip() and not span.style and not span.valid_white_space: 
