@@ -407,7 +407,7 @@ class TextBlock(Block):
             text_direction_param (tuple): ``(x0_index, x1_index, direction_factor)``, 
                 e.g. ``(0, 2, 1)`` for horizontal text, while ``(3, 1, -1)`` for vertical text.
         '''
-        
+
         # indexes based on text direction
         idx0, idx1, f = text_direction_param
 
@@ -484,18 +484,19 @@ class TextBlock(Block):
             # alignment = TextAlignment.JUSTIFY if len(rows)>=3 else external_alignment()
             alignment = TextAlignment.LEFT # 不用justify对齐
 
+        elif left_aligned:
+            # 提升居左的优先级
+            alignment = TextAlignment.LEFT
+
         elif center_aligned:
             alignment = TextAlignment.CENTER
-
-        elif left_aligned:            
-            alignment = TextAlignment.LEFT
 
         elif right_aligned:
             # change right alignment to left if two lines only
             alignment = TextAlignment.RIGHT if len(rows)>=3 else TextAlignment.LEFT
 
         else:
-            alignment = TextAlignment.NONE
+            alignment = TextAlignment.LEFT
         
         # set first line space in case left/justify
         if alignment==TextAlignment.LEFT or alignment==TextAlignment.JUSTIFY:
