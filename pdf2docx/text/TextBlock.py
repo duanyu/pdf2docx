@@ -496,7 +496,8 @@ class TextBlock(Block):
             alignment = TextAlignment.RIGHT if len(rows)>=3 else TextAlignment.LEFT
 
         else:
-            alignment = TextAlignment.LEFT
+            # 用None效果要好一些
+            alignment = TextAlignment.NONE
         
         # set first line space in case left/justify
         if alignment==TextAlignment.LEFT or alignment==TextAlignment.JUSTIFY:
