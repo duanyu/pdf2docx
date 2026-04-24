@@ -603,6 +603,21 @@ class Blocks(ElementCollection):
         vertical direction. At this moment, the block instance is either Line or TableBlock.
         '''
         idx0, idx1 = (1, 3) if self.is_horizontal_text else (0, 2)
+
+        # 在 idx0, idx1 之后补充“水平(正交轴)边界”索引与判断函数
+        hidx0, hidx1 = (0, 2) if self.is_horizontal_text else (1, 3)
+
+        def get_h_bdy(block):
+            bbox = block.bbox
+            return bbox[hidx0], bbox[hidx1]
+
+        def has_horizontal_overlap(block1, block2, min_ratio: float = 0.1):
+            a0, a1 = get_h_bdy(block1)
+            b0, b1 = get_h_bdy(block2)
+            overlap = max(0.0, min(a1, b1) - max(a0, b0))
+            base = max(1e-6, min(a1 - a0, b1 - b0))
+            return (overlap / base) >= min_ratio
+
         def get_v_bdy(block):
             '''Coordinates of block top and bottom boundaries.'''
             bbox = block.bbox
@@ -656,6 +671,12 @@ class Blocks(ElementCollection):
             # check two adjacent text lines
             else:
                 ref_line = lines[-1] if lines else None
+                height_sim = False
+                if ref_line:
+                    h1 = line_height(ref_line) if ref_line else None
+                    h2 = line_height(block)
+                    height_tol_ratio = 0.2
+                    height_sim = abs(h1 - h2) <= height_tol_ratio * max(h1, h2)
 
                 # first line or in same row with previous line: needn't to create new text block
                 if not ref_line or ref_line.in_same_row(block):
@@ -664,7 +685,15 @@ class Blocks(ElementCollection):
                 # image line: create new text block
                 elif block.image_spans or ref_line.image_spans:
                     start_new_block = True
-                
+
+                # 相邻两行在水平(正交轴)上无交叉：强制新开 text block（通常代表不同栏/不同对齐带）
+                elif not has_horizontal_overlap(ref_line, block):
+                    start_new_block = True
+
+                # height不相似，就不join
+                elif not height_sim:
+                    start_new_block = True
+
                 # lower than common line spacing: needn't to create new text block
                 elif vertical_distance(ref_line, block)<=ref_dis+2.5 and \
                     ref_dis<=max_line_spacing_ratio*line_height(ref_line):
