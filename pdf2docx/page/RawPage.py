@@ -20,13 +20,30 @@ from ..common.share import debug_plot
 from ..common import constants
 from ..common.Collection import Collection
 from ..image.ImageBlock import ImageBlock
-from ..common.share import TextDirection
+from ..common.share import TextDirection, is_toc_dots
 from importlib import resources
 from fontTools.ttLib import TTFont
 import base64
 import math
 import cv2
 import numpy as np
+import re
+import unicodedata
+
+MATH_FONTS_PREFIX = ("CMR", "CMEX", "CMMI", "CMSY", "CMBX", "MSBM", "LMMath")
+MATH_FONTS_EXACT = {"txmiaX", "txsys", "txexs", "StandardSymL"}
+MATH_FONT_HINTS = ("MathMI", "ReguItal")
+
+EQ_NUM_RE = re.compile(r"^\.?\s*\([\d.]+\)$")
+
+# 常见数学关系/运算符（可按你的数据补充）
+MATH_OP_RE = re.compile(r"[=<>±×÷∑∫√∞≈≠≤≥→←↔∈∉∩∪·•]")
+
+# 纯英文长单词（自然语言特征）
+LONG_WORD_RE = re.compile(r"^[a-z]{3,}$")
+
+# 常见“函数名”可以保留，但不要单独当成公式证据
+MATH_FUNC_WORDS = {"sin", "cos", "tan", "log", "ln", "exp", "min", "max", "lim", "const"}
 
 
 def has_red_seal(
@@ -124,33 +141,19 @@ def has_red_seal(
 
     return False
 
-# DEFAULT_FONT_NAME = 'helv'
-# root_pkg = __package__.split(".")[0]
-
 # simsun_path = str(resources.files(root_pkg).joinpath("fonts/simsun.ttc"))
 # SIMSUN_FONT_OBJ = fitz.Font(fontname="SimSun", fontfile=simsun_path)
 # simsun_line_height_ratio = Fonts.get_line_height_factor(TTFont(simsun_path, fontNumber=0))
 simsun_line_height_ratio = 1.3
-
 # simhei_path = str(resources.files(root_pkg).joinpath("fonts/SimHei.ttf"))
 # SIMHEI_FONT_OBJ = fitz.Font(fontname="SimHei", fontfile=simhei_path)
 # simhei_line_height_ratio = Fonts.get_line_height_factor(TTFont(simhei_path))
 simhei_line_height_ratio = 1.3
-
 # roman_path = str(resources.files(root_pkg).joinpath("fonts/Times New Roman/times new roman.ttf"))
 # times_new_roman_line_height_ratio = Fonts.get_line_height_factor(TTFont(roman_path))
 times_new_roman_line_height_ratio = 1.115
-
-# fangsong_path = str(resources.files(root_pkg).joinpath("fonts/仿宋_GB2312.ttf"))
-# fangsong_line_height_ratio = Fonts.get_line_height_factor(TTFont(fangsong_path))
 fangsong_line_height_ratio = 1.3
-
-# dengxian_path = str(resources.files(root_pkg).joinpath("fonts/等线.ttf"))
-# dengxian_line_height_ratio = Fonts.get_line_height_factor(TTFont(dengxian_path))
 dengxian_line_height_ratio = 1.432
-
-# arial_path = str(resources.files(root_pkg).joinpath("fonts/Arial.ttf"))
-# arial_line_height_ratio = Fonts.get_line_height_factor(TTFont(arial_path))
 arial_line_height_ratio = 1.15
 
 center_fuzzy_ratio = 0.1  # 距离中线多少比例认为是双栏（允许的误差范围）
@@ -218,11 +221,19 @@ class RawPage(BasePage, ABC):
         # for b in self.blocks:
         #     print(b, b.text, b.store()['type'])
         if settings.get('merge_image_with_overlap_lines', False):
-            self.merge_image_with_overlap_lines(overlap_ratio=settings.get('merge_image_overlap_ratio', 0.1))
+            self.merge_image_with_overlap_lines(overlap_ratio=settings.get('merge_image_overlap_ratio', 0.1), intersect_threshold=0)
         # print('after merge:')
         # print(len(self.blocks))
         # for b in self.blocks:
         #     print(b, b.text, b.store()['type'])
+
+        if settings.get('complex_equation_to_image', False):
+            self.complex_equation_to_image()
+        # print('after equation to image:')
+        # print(len(self.blocks))
+        # for b in self.blocks:
+        #     print(b, b.text, b.store()['type'])
+
         self.blocks.clean_up(
             settings['float_image_ignorable_gap'],
             settings['line_overlap_threshold'],
@@ -234,15 +245,322 @@ class RawPage(BasePage, ABC):
             settings['shape_min_dimension'])
         return self.shapes
 
-    def merge_image_with_overlap_lines(self, overlap_ratio=0.95):
+    def complex_equation_to_image(self):
         """
+        把相邻的 equation block 先合并为 group（list of block）。
+        如果某个 group 中任意一个 block 包含复杂公式，则对整个 group 截图，
+        并将该 group 替换为一个 image block。
+        """
+
+        def is_math_symbol_char(ch: str) -> bool:
+            # Sm: Symbol, Math
+            return unicodedata.category(ch) == "Sm" or ch in "αβγδεζηθικλμνξοπρστυφχψω"
+
+        def is_equation(block, ratio_th=0.5, min_total_chars=1):
+            store = block.store()
+            if store.get("type") != 0:
+                return False
+
+            total = 0
+            math_like = 0
+
+            long_word_cnt = 0
+            word_cnt = 0
+
+            for line in store.get("lines", []):
+                for span in line.get("spans", []):
+                    text = (span.get("text") or "").strip().lower()
+                    if not text:
+                        continue
+
+                    # 编号部分直接不统计
+                    if EQ_NUM_RE.match(text):
+                        continue
+
+                    font = span.get("font", "")
+
+                    # 大型运算符，则直接设定为equation
+                    if font.startswith('CMEX') or '∑︁' in text or '∑' in text:
+                        return True
+
+                    total += len(text)
+
+                    # 2) 自然语言信号：长英文单词
+                    for tok in re.split(r"\s+", text):
+                        if not tok:
+                            continue
+                        if tok.isalpha():
+                            word_cnt += 1
+                            if len(tok) >= 3 and tok not in MATH_FUNC_WORDS:
+                                long_word_cnt += 1
+
+                    # 3) 字体命中（作为加分项，但不再是唯一依据）
+                    font_hit = (
+                            font.startswith(MATH_FONTS_PREFIX)
+                            or any(h in font for h in MATH_FONT_HINTS)
+                            or font in MATH_FONTS_EXACT
+                    )
+
+                    # 4) 字符级数学符号命中（比仅字体更稳）
+                    sym_hit_chars = sum(1 for ch in text if is_math_symbol_char(ch))
+
+                    # 5) “函数词”只算弱信号：需要配合其他特征
+                    func_hit = (text in MATH_FUNC_WORDS)
+
+                    if font_hit:
+                        math_like += len(text)
+
+                    # 数学符号字符直接加分（避免字体缺失时漏检）
+                    math_like += sym_hit_chars
+
+                    # 函数词弱加分（可选）
+                    if func_hit:
+                        math_like += max(1, len(text) // 2)
+
+            if total < min_total_chars:
+                return False
+
+            ratio = math_like / total
+
+            # 排除：自然语言特征太强（长词占比高）
+            if word_cnt > 0 and (long_word_cnt / word_cnt) > 0.5:
+                return False
+
+            return ratio >= ratio_th
+
+        def is_simple_left_to_right(
+                blocks_in_group: list,
+                vertical_overlap_threshold: float = 0.3
+        ) -> bool:
+            """
+            判断一个文本块组（block group）是否为简单的从左到右排列。
+
+            这个函数通过检查相邻文本块之间的垂直重叠来工作。如果任何一对
+            从左到右排序的相邻块没有足够的垂直重叠，则认为它是一个复杂结构
+            （如分数、带上下限的运算符等）。
+
+            Args:
+                blocks_in_group (List[block]): 一个包含 block 对象的列表。
+                    每个 block 对象必须有一个 .store().get("bbox") 方法来返回其边界框。
+                    边界框格式为 [x0, y0, x1, y1]。
+                vertical_overlap_threshold (float): 垂直重叠的阈值。
+                    如果两个相邻块的垂直重叠高度小于它们中较小那个高度的这个比例，
+                    则认为它们是堆叠的。默认值为 0.3 (30%)。
+
+            Returns:
+                bool: 如果是简单的从左到右排列，返回 True；否则返回 False。
+            """
+            # 1. 处理边界情况：0或1个块一定是简单的
+            bboxes = []
+            for block in blocks_in_group:
+                store = block.store()
+                if store.get("type") != 0:
+                    continue
+                for line in store.get("lines", []):
+                    for span in line.get("spans", []):
+                        bbox = span.get("bbox")
+                        if bbox and bbox[3] > bbox[1] and bbox[2] > bbox[0]:  # 确保bbox有效
+                            bboxes.append(bbox)
+
+            if len(bboxes) < 2:
+                return True
+
+            # 3. 根据水平起始位置 (x0) 对边界框进行排序
+            sorted_bboxes = sorted(bboxes, key=lambda b: b[0])
+
+            # 4. 遍历排序后的边界框，逐对比较相邻的两个
+            for i in range(len(sorted_bboxes) - 1):
+                bbox1 = sorted_bboxes[i]
+                bbox2 = sorted_bboxes[i + 1]
+
+                # 提取Y坐标和高度
+                y0_1, y1_1 = bbox1[1], bbox1[3]
+                y0_2, y1_2 = bbox2[1], bbox2[3]
+                height1 = y1_1 - y0_1
+                height2 = y1_2 - y0_2
+
+                # 5. 计算垂直重叠的高度
+                # 重叠区域的顶端是两个框顶端的较大值
+                # 重叠区域的底端是两个框底端的较小值
+                overlap_y_start = max(y0_1, y0_2)
+                overlap_y_end = min(y1_1, y1_2)
+
+                overlap_height = max(0, overlap_y_end - overlap_y_start)
+
+                # 确定用于比较的最小高度
+                min_height = min(height1, height2)
+
+                # 6. 判断重叠是否足够
+                # 如果重叠高度小于最小高度的阈值比例，则认为它们是堆叠的（复杂结构）
+                if overlap_height < min_height * vertical_overlap_threshold:
+                    # 打印调试信息（可选）
+                    # print(f"复杂结构嫌疑: {bbox1} 和 {bbox2} 垂直重叠不足。")
+                    # print(f"重叠高度: {overlap_height}, 最小高度: {min_height}, 阈值: {min_height * vertical_overlap_threshold}")
+                    return False
+
+            # 如果所有相邻对都通过了检查，则该组是简单的
+            return True
+
+        # 新增辅助函数：判断 group 是否与后一个 block 在同一行；但允许是序号
+        def is_inline_with_next(group_end_idx, group_y0, group_y1):
+            if group_end_idx >= len(original_blocks) - 1:
+                return False
+            next_block = original_blocks[group_end_idx + 1]
+            next_bbox = next_block.store().get("bbox")
+            if not next_bbox or len(next_bbox) != 4:
+                return False
+
+            if isinstance(next_block.text, str) and EQ_NUM_RE.match(next_block.text.strip()):
+                return False
+
+            next_y_center = (next_bbox[1] + next_bbox[3]) / 2
+            group_y_center = (group_y0 + group_y1) / 2
+            return (group_y0 <= next_y_center <= group_y1) or (next_bbox[1] <= group_y_center <= next_bbox[3])
+
+        def is_inline_with_prev(group_start_idx, group_y0, group_y1):
+            """
+            判断 group 是否与前一个 block 在同一行（inline 公式）。
+            通过检查两者的垂直中心点是否互相落在对方的 y 范围内来判断。
+            """
+            if group_start_idx == 0:
+                return False
+
+            prev_block = original_blocks[group_start_idx - 1]
+            prev_bbox = prev_block.store().get("bbox")
+            if not prev_bbox or len(prev_bbox) != 4:
+                return False
+
+            prev_y_center = (prev_bbox[1] + prev_bbox[3]) / 2
+            group_y_center = (group_y0 + group_y1) / 2
+
+            # 前一个 block 的垂直中心在 group 的 y 范围内，
+            # 或 group 的垂直中心在前一个 block 的 y 范围内
+            return (group_y0 <= prev_y_center <= group_y1) or (prev_bbox[1] <= group_y_center <= prev_bbox[3])
+
+        # 先转成普通 list，便于按索引分组和重建
+        original_blocks = list(self.blocks)
+        if not original_blocks:
+            return
+
+        # ======== Phase 1: 将相邻的 equation block 合并为 group ========
+        equation_groups = []
+        current_group = []
+        current_start = None
+
+        for idx, block in enumerate(original_blocks):
+            if is_equation(block):
+                if not current_group:
+                    current_start = idx
+                current_group.append(block)
+            elif current_group:
+                equation_groups.append({
+                    "start": current_start,
+                    "end": idx - 1,
+                    "blocks": current_group
+                })
+                current_group = []
+                current_start = None
+
+        if current_group:
+            equation_groups.append({
+                "start": current_start,
+                "end": len(original_blocks) - 1,
+                "blocks": current_group
+            })
+
+        if not equation_groups:
+            return
+
+        # ======== Phase 2: 对包含复杂公式的 group 截图并转为 image block ========
+        group_to_image = {}
+
+        for group in equation_groups:
+            blocks_in_group = group["blocks"]
+
+            # 注释掉下面的代码意味着：所有的interline equation都转为image
+            # group 中有复杂公式，才进行merge
+            if is_simple_left_to_right(blocks_in_group):
+                continue
+
+            group_bboxes = []
+            for block in blocks_in_group:
+                bbox = block.store().get("bbox")
+                if bbox and len(bbox) == 4:
+                    group_bboxes.append(bbox)
+
+            if not group_bboxes:
+                continue
+
+            x0 = min(bbox[0] for bbox in group_bboxes)
+            y0 = min(bbox[1] for bbox in group_bboxes)
+            x1 = max(bbox[2] for bbox in group_bboxes)
+            y1 = max(bbox[3] for bbox in group_bboxes)
+
+            # ---- inline 公式直接跳过，不截图 ----
+            if is_inline_with_prev(group["start"], y0, y1) or is_inline_with_next(group["end"], y0, y1):
+                continue
+
+            # ---- y0 纠正：仅对 interline 公式 ----
+            group_start_idx = group["start"]
+            if group_start_idx > 0:
+                prev_block = original_blocks[group_start_idx - 1]
+                prev_bbox = prev_block.store().get("bbox")
+                if prev_bbox and len(prev_bbox) == 4:
+                    prev_y1 = prev_bbox[3]
+                    if y0 < prev_y1:
+                        y0 = prev_y1
+
+            expanded_bbox = (x0, y0, x1, y1)
+            rect = fitz.Rect(*expanded_bbox)
+
+            try:
+                pix = self.page_engine.get_pixmap(clip=rect, dpi=200)
+                img_bytes = pix.tobytes("png")
+                image_base64 = base64.b64encode(img_bytes).decode("ascii")
+            except Exception as e:
+                print(e)
+                continue
+
+            new_image_block = {
+                "type": 1,
+                "bbox": expanded_bbox,
+                "image": image_base64,
+                "width": expanded_bbox[2] - expanded_bbox[0],
+                "height": expanded_bbox[3] - expanded_bbox[1],
+            }
+
+            group_to_image[group["start"]] = {
+                "end": group["end"],
+                "image_block": new_image_block
+            }
+
+        if not group_to_image:
+            return
+
+        # ======== Phase 3: 重建 blocks 列表，保持原有顺序 ========
+        final_blocks = Blocks(parent=self)
+        i = 0
+        n = len(original_blocks)
+
+        while i < n:
+            if i in group_to_image:
+                replacement = group_to_image[i]
+                final_blocks.append(ImageBlock(replacement["image_block"]).to_text_block())
+                i = replacement["end"] + 1
+            else:
+                final_blocks.append(original_blocks[i])
+                i += 1
+
+        self.blocks = final_blocks
+
+    def merge_image_with_overlap_lines(self, overlap_ratio=0.95, intersect_threshold=0):
+        """
+        intersect_threshold 允许不严格重叠【为了合并图表的y轴】
         1. 对所有 image block，用 Union-Find 将有交叉的合并为一个大的 image bbox
         2. 将与合并后 image bbox 有足够重叠的 text block 吸收进来（迭代扩大 bbox）
            同时迭代检查组间是否因扩大而产生交叉，若有则合并组
         3. 生成新的 image block，替换被合并的旧 blocks
         """
-
-        intersect_threshold = 3  # 允许不严格重叠【为了合并图表的y轴】
 
         def bbox_area(b):
             return max(0, b[2] - b[0]) * max(0, b[3] - b[1])
@@ -390,18 +708,18 @@ class RawPage(BasePage, ABC):
                 continue  # 单个 image 且没有吸收 text，保持原样
 
             merged_bbox = group_bboxes[root]
-            # y轴加一点点【有时候图片截取不全】
-            merged_bbox = (merged_bbox[0], merged_bbox[1], merged_bbox[2], merged_bbox[3]+2)
+            # y轴不增加（不可控）
+            merged_bbox = (merged_bbox[0], merged_bbox[1], merged_bbox[2], merged_bbox[3])
             rect = fitz.Rect(*merged_bbox)
 
             try:
+                # 避免报错
                 pix = self.page_engine.get_pixmap(clip=rect, dpi=200)
+                img_bytes = pix.tobytes("png")
+                image_base64 = base64.b64encode(img_bytes).decode("ascii")
             except Exception as e:
                 print(e)
                 continue
-
-            img_bytes = pix.tobytes("png")
-            image_base64 = base64.b64encode(img_bytes).decode("ascii")
 
             if has_red_seal(image_base64, circularity_thresh=0.6):
                 # print("red seal!")
@@ -576,10 +894,9 @@ class RawPage(BasePage, ABC):
                 if section:
                     sections.append(section)
 
-
         # check section row by row
         pre_num_col = 1
-        y_ref = Y0 # to calculate v-distance between sections
+        y_ref = Y0  # to calculate v-distance between sections
         for row in elements.group_by_rows():
             # check column col by col
             cols = row.group_by_columns()
@@ -634,7 +951,8 @@ class RawPage(BasePage, ABC):
                     col_margin_list.append(next_x0-this_x1)
                     page_center = (X1 + X0) / 2
                     this_next_col_center_ratio = ((this_x1 + next_x0) / 2) / page_center
-                    if (1-center_fuzzy_ratio) <= this_next_col_center_ratio <= (1+center_fuzzy_ratio) and next_x0 > this_x1 and split_col_i < 0:
+                    if (1 - center_fuzzy_ratio) <= this_next_col_center_ratio <= (
+                            1 + center_fuzzy_ratio) and next_x0 > this_x1 and split_col_i < 0:
                         split_col_i = col_i
                         center_col_margin = next_x0-this_x1
                 if split_col_i >= 0 and has_wide_col and center_col_margin > 3:
@@ -649,9 +967,10 @@ class RawPage(BasePage, ABC):
                     cols = [col1, col2]
                     current_num_col = 2
 
-                if current_num_col > 2:
-                    # 额外处理左侧为小节标题的情况
-                    if has_wide_col and hasattr(cols[0][0], "text") and len(cols[0][0].text.strip()) > 0 and cols[0][0].text.strip()[0] in ['1', '2', '3', '4', '5', '6', '7', '8', '9']:
+                # 额外处理左侧为小节标题的情况（中点不在中间）；但要filter目录的情况
+                if current_num_col > 2 and not any([is_toc_dots(col[0].text) for col in cols if hasattr(col[0], 'text')]):
+                    if has_wide_col and hasattr(cols[0][0], "text") and len(cols[0][0].text.strip()) > 0 and \
+                            cols[0][0].text.strip()[0] in ['1', '2', '3', '4', '5', '6', '7', '8', '9']:
                         first_col = Collection()
                         second_col = Collection()
                         for col in flat_cols:
@@ -669,27 +988,27 @@ class RawPage(BasePage, ABC):
 
                 # print('current_num_col after:', current_num_col)
 
-                    # print('【修正后】')
-                    # print('current_num_col:', current_num_col)
-                    # for col_i, col in enumerate(cols):
-                    #     for _col_i, _col in enumerate(col.store()):
-                    #         for _span_i, _span in enumerate(_col.get('spans', {})):
-                    #             print(f"col-{col_i}-{_col_i}, span-{_span_i}: {_span.get('text')}: {_col}")
-                    # print()
+                # print('【修正后】')
+                # print('current_num_col:', current_num_col)
+                # for col_i, col in enumerate(cols):
+                #     for _col_i, _col in enumerate(col.store()):
+                #         for _span_i, _span in enumerate(_col.get('spans', {})):
+                #             print(f"col-{col_i}-{_col_i}, span-{_span_i}: {_span.get('text')}: {_col}")
+                # print()
 
             # column check:
             # consider 2-cols only
-            if current_num_col>2:
+            if current_num_col > 2:
                 current_num_col = 1
 
             # the width of two columns shouldn't have significant difference
             # 避免table被误判
-            elif current_num_col==2:
+            elif current_num_col == 2:
                 u0, v0, u1, v1 = cols[0].bbox
                 m0, n0, m1, n1 = cols[1].bbox
-                x0 = (u1+m0)/2.0
-                c1, c2 = x0-X0, X1-x0 # column width
-                w1, w2 = u1-u0, m1-m0 # line width
+                x0 = (u1 + m0) / 2.0
+                c1, c2 = x0 - X0, X1 - x0  # column width
+                w1, w2 = u1 - u0, m1 - m0  # line width
                 f = 2.0
                 if not 1/f<=c1/c2<=f or w1/c1<0.33 or w2/c2<0.33:
                     if hasattr(cols[0][0], "text") and len(cols[0][0].text.strip()) > 0 and (cols[0][0].text.strip()[0] in ['1', '2', '3', '4', '5', '6', '7', '8', '9'] or cols[0][0].text.strip() in ['Abstract', 'Acknowledgements', 'References']):
@@ -701,31 +1020,30 @@ class RawPage(BasePage, ABC):
                         current_num_col = 1
 
             # process exceptions
-            if pre_num_col==2 and current_num_col==1:
+            if pre_num_col == 2 and current_num_col == 1:
                 # though current row has one single column, it might have another virtual
                 # and empty column. If so, it should be counted as 2-cols
                 cols = lines.group_by_columns()
                 pos = cols[0].bbox[2]
-                if row.bbox[2]<=pos or row.bbox[0]>pos:
+                if row.bbox[2] <= pos or row.bbox[0] > pos:
                     current_num_col = 2
 
                 # pre_num_col!=current_num_col => to close section with collected lines,
                 # before that, further check the height of collected lines
                 else:
                     x0, y0, x1, y1 = lines.bbox
-                    if y1-y0<settings['min_section_height']:
+                    if y1 - y0 < settings['min_section_height']:
                         pre_num_col = 1
 
 
-            elif pre_num_col==2 and current_num_col==2:
+            elif pre_num_col == 2 and current_num_col == 2:
                 # though both 2-cols, they don't align with each other
                 combine = Collection(lines)
                 combine.extend(row)
-                if len(combine.group_by_columns(sorted=False))==1: current_num_col = 1
-
+                if len(combine.group_by_columns(sorted=False)) == 1: current_num_col = 1
 
             # finalize pre-section if different from the column count of previous section
-            if current_num_col!=pre_num_col:
+            if current_num_col != pre_num_col:
                 # process pre-section
                 close_section(pre_num_col, lines, y_ref)
                 if sections:
@@ -752,18 +1070,17 @@ class RawPage(BasePage, ABC):
 
         return sections
 
-
     @staticmethod
-    def _create_section(num_col:int, elements:Collection, h_range:tuple, y_ref:float):
+    def _create_section(num_col: int, elements: Collection, h_range: tuple, y_ref: float):
         '''Create section based on column count, candidate elements and horizontal boundary.'''
         if not elements: return
         X0, X1 = h_range
 
-        if num_col==1:
+        if num_col == 1:
             x0, y0, x1, y1 = elements.bbox
             # Note: do not use Column((X0, y0, X1, y1)) directly here. We have to set final bbox
             # per update_bbox to avoid double rotation in case page rotation exists.
-            column = Column().update_bbox((X0, y0, X1, y1)) # this is final bbox, must use update_bbox
+            column = Column().update_bbox((X0, y0, X1, y1))  # this is final bbox, must use update_bbox
             column.add_elements(elements)
             section = Section(space=0, columns=[column])
             before_space = y0 - y_ref
@@ -774,12 +1091,13 @@ class RawPage(BasePage, ABC):
             #     print(col.store())
             split_col_i = -1
             # 这里也要考虑到多col的情况，把中点两边的分为两个col
-            for col_i in range(len(cols)-1):
+            for col_i in range(len(cols) - 1):
                 next_x0 = cols[col_i + 1].bbox[0]
                 this_x1 = cols[col_i].bbox[2]
                 page_center = (X1 + X0) / 2
                 this_next_col_center_ratio = ((this_x1 + next_x0) / 2) / page_center
-                if (1-center_fuzzy_ratio) <= this_next_col_center_ratio <= (1+center_fuzzy_ratio) and next_x0 > this_x1:
+                if (1 - center_fuzzy_ratio) <= this_next_col_center_ratio <= (
+                        1 + center_fuzzy_ratio) and next_x0 > this_x1:
                     split_col_i = col_i
 
             if split_col_i >= 0:
@@ -797,7 +1115,7 @@ class RawPage(BasePage, ABC):
                 # print('col num', len(cols))
                 u0, v0, u1, v1 = cols[0].bbox
                 m0, n0, m1, n1 = cols[1].bbox
-            u = (u1+m0)/2.0
+            u = (u1 + m0) / 2.0
 
             column_1 = Column().update_bbox((X0, v0, u, v1))
             column_1.add_elements(elements)
