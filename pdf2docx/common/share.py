@@ -1,7 +1,7 @@
 '''Common methods.'''
 
 from enum import Enum
-import random
+import random, re
 from collections.abc import Iterable
 from fitz.utils import getColorList, getColorInfoList
 
@@ -256,55 +256,139 @@ def debug_plot(title:str, show=True):
         return inner
     return wrapper
 
-def is_list_item(text, bullets=True, numbers=True):
-    '''Returns `text` if `bullets` is true and `text` is a bullet character, or
-    `numbers` is true and `text` is not empty and consists entirely of digits
-    0-9. Otherwise returns None.
 
-    If `bullets` is True we use an internal list of bullet characters;
-    otherwise it should be a list of integer Unicode values.
-    '''
+def is_toc_dots(text):
+    """
+    判断文本是否为目录中的点号引导符（如 . . . . . . . . .）
+
+    Args:
+        text: 要检查的文本字符串
+
+    Returns:
+        bool: 如果是目录点号符号返回True，否则返回False
+    """
+    if not text:
+        return False
+
+    if text.count('.') < 5 and text.count('•') < 5:
+        return False
+
+    if re.search(r'([•\.]\s*){5,}', text):
+        return True
+
     return False
-    if bullets is True:
-        bullets2 = (
-                # From https://en.wikipedia.org/wiki/Bullet_(typography).
-                0x2022, # BULLET (&bull;, &bullet;)
-                0x2023, # TRIANGULAR BULLET
-                0x2043, # HYPHEN BULLET (&hybull;)
-                0x204c, # BLACK LEFTWARDS BULLET
-                0x204d, # BLACK RIGHTWARDS BULLET
-                0x2219, # BULLET OPERATOR for use in mathematical notation primarily as a dot product instead of interpunct.
-                0x25c9, # FISHEYE used in Japan as a bullet, and called tainome.
-                0x25cb, # WHITE CIRCLE (&cir;)
-                0x25cf, # BLACK CIRCLE
-                0x25cf, # Bullet, black small circle.
-                0x25d8, # INVERSE BULLET
-                0x25e6, # WHITE BULLET
-                0x2619, # REVERSED ROTATED FLORAL HEART BULLET; see Fleuron (typography)
-                0x2765, # ROTATED HEAVY BLACK HEART BULLET
-                0x2767, # ROTATED FLORAL HEART BULLET; see Fleuron (typography)
-                0x29be, # CIRCLED WHITE BULLET (&olcir;)
-                0x29bf, # CIRCLED BULLET (&ofcir;)
 
-                # Additional.
-                0x25aa, # Black small square, square bullet.
-                0xf0b7, # "Private Use Character" but seems to be used by libreoffice for bullets.
-                )
-    else:
-        bullets2 = bullets
-    if bullets:
-        if len(text)==1:
-            c = text[0]
-            cc = ord(c)
-            if cc in bullets2:
-                if bullets is True and cc == 0xf0b7:
-                    return chr(0x2022)
-                return text
-    if numbers:
-        for c in text:
-            if isinstance(c, list):
-                c = c[0]
-            if c not in '0123456789':
-                break
-        else:
-            return text
+
+class ListItemDetector:
+    """列表项检测器，带快速过滤优化"""
+
+    # 定义快速过滤用的符号集合（O(1)查找）
+    QUICK_FILTER_CHARS = {
+        # Bullet 符号
+        '•', '-', '*', '○', '●', '□', '■', '◆', '◇', '▪', '▫',
+        '✓', '✔', '➢', '➣', '➤', '►', '⦿', '⦾',
+        # 点和顿号
+        '.', '、', '。',
+        # 括号（用于编号）
+        '(', ')', '（', '）', '[', ']',
+    }
+
+    # 详细的正则模式
+    PATTERNS = [
+        # 1. Bullet 符号
+        r'^[•\-*○●□■◆◇▪▫✓✔➢➣➤►⦿⦾]\s',
+
+        # 2. 数字编号
+        r'^\d{1,3}\.\s',  # 1. 2. 3.
+        r'^\d{1,3}\)\s',  # 1) 2) 3)
+        r'^\d{1,3}[、]\s*',  # 1、2、3、
+        r'^\(\d{1,3}\)\s*',  # (1) (2) (3)
+        r'^\[\d{1,3}\]\s*',  # [1] [2] [3]
+
+        # ✅ 新增：多级数字编号
+        r'^\d+(\.\d+){1,3}\.?\s',  # 4.3 xxx / 4.3.3 xxx / 1.2.3.4. xxx
+
+        # # 3. 字母编号 - 太容易在参考文献中误判，去掉
+        # r'^[A-Za-z]\.\s',  # A. B. C.
+        # r'^[A-Za-z]\)\s',  # A) B) C)
+        # r'^\([A-Za-z]\)\s*',  # (A) (B) (C)
+        # r'^\[[A-Za-z]\]\s*',  # [A] [B] [C]
+
+        # # 4. 罗马数字
+        # r'^[IVXLCDMivxlcdm]+\.\s',  # I. II. III.
+        # r'^[IVXLCDMivxlcdm]+\)\s',  # I) II) III)
+        # r'^\([IVXLCDMivxlcdm]+\)\s*',  # (I) (II) (III)
+
+        # 5. 中文数字
+        r'^[一二三四五六七八九十百千万壹贰叁肆伍陆柒捌玖拾佰仟]+[、.]\s*',
+        r'^[（(][一二三四五六七八九十百千万壹贰叁肆伍陆柒捌玖拾佰仟]+[）)]\s*',
+
+        # 6. 中文章节标记
+        r'^第[一二三四五六七八九十百千万\d]+[章节条款项部分篇回集卷]\s*',
+        r'^第[（(]?\d+[）)]?[章节条款项部分篇回集卷]\s*',
+    ]
+
+    def __init__(self):
+        # 预编译正则表达式以提高性能
+        self.compiled_patterns = [re.compile(p) for p in self.PATTERNS]
+
+    def quick_filter(self, text):
+        """
+        快速过滤：检查文本前几个字符是否包含列表符号
+
+        参数:
+            text (str): 输入文本
+
+        返回:
+            bool: 如果可能是列表项返回True，否则返回False
+        """
+        # 检查前5个字符（大部分列表标记在前面）
+        prefix = text[:5] if len(text) >= 5 else text
+
+        # 快速检查是否包含任何列表相关符号
+        return any(char in self.QUICK_FILTER_CHARS for char in prefix)
+
+    def is_list_item(self, text):
+        """
+        判断给定文本是否为列表项
+
+        参数:
+            text (str): 输入文本
+
+        返回:
+            bool: 如果是列表项返回True，否则返回False
+        """
+        if not text or not isinstance(text, str):
+            return False
+
+        # 去除首尾空白
+        text = text.strip()
+
+        if not text:
+            return False
+
+        # 🚀 快速过滤：如果不包含任何列表符号；或者不是toc，直接返回False
+        if not self.quick_filter(text) and not is_toc_dots(text):
+            return False
+
+        # 详细匹配：使用预编译的正则表达式
+        for pattern in self.compiled_patterns:
+            if pattern.match(text):
+                return True
+
+        return False
+
+# 简化版函数接口
+_detector = ListItemDetector()
+
+def is_list_item(text):
+    """
+    便捷函数：判断文本是否为列表项
+
+    参数:
+        text (str): 输入文本
+
+    返回:
+        bool: 如果是列表项返回True，否则返回False
+    """
+    return _detector.is_list_item(text)
