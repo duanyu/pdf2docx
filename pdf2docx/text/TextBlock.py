@@ -423,6 +423,12 @@ class TextBlock(Block):
         self.left_space  = d_left
         self.right_space = d_right
 
+        # 减少right space可以有效减少过度换行问题；但风险是可能把下一行的内容吸上去（如果para分的好就不会这样）
+        if d_right <= 20.0:
+            self.right_space = 0.0
+        else:
+            self.right_space -= 20.0
+
         # --------------------------------------------------------------------------
         # First priority: 
         # significant distance exists in any two adjacent lines -> set NONE temporarily. 
@@ -443,11 +449,12 @@ class TextBlock(Block):
         # |    ============    | -> center
         # |   ================ | -> left
         # |        =========== | -> right
-        def external_alignment():         
-            if abs(d_center) < lines_center_aligned_threshold: 
-                return TextAlignment.CENTER
-            elif d_left <= 0.25*W:
+        def external_alignment():
+            # 提升居左的优先级
+            if d_left <= 0.25 * W:
                 return TextAlignment.LEFT
+            elif abs(d_center) < lines_center_aligned_threshold:
+                return TextAlignment.CENTER
             else:
                 return TextAlignment.RIGHT
         
