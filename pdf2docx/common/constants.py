@@ -30,6 +30,7 @@ DEFAULT_LINE_SPACING = 1.02
 
 # punctuation implying end of a sentense
 SENTENCE_END_PUNC = '.．。?？!！'
+SENTENCE_END_PUNC += '"”)）'
 
 # control characters not supported by lxml
 # https://github.com/dothinking/pdf2docx/issues/126#issuecomment-1040034077
