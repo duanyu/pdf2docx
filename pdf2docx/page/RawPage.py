@@ -922,6 +922,9 @@ class RawPage(BasePage, ABC):
                 if split_col_i >= 0 and has_wide_col and center_col_margin > 3:
                     # 符合要求，确实为双栏
                     pass
+                # Abstract的特殊逻辑
+                elif has_wide_col and hasattr(cols[0][0], "text") and cols[0][0].text.strip() == 'Abstract':
+                    pass
                 else:
                     # 否则为单栏
                     current_num_col = 1
