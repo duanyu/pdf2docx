@@ -273,13 +273,13 @@ class RawPage(BasePage, ABC):
                     if not text:
                         continue
 
-                    # 编号部分直接不统计
-                    if EQ_NUM_RE.match(text):
+                    # 编号/函数词 直接不参与统计
+                    if EQ_NUM_RE.match(text) or text in MATH_FUNC_WORDS:
                         continue
 
                     font = span.get("font", "")
 
-                    # 大型运算符，则直接设定为equation
+                    # 大型运算符，直接设定为equation
                     if font.startswith('CMEX') or '∑︁' in text or '∑' in text:
                         return True
 
@@ -290,32 +290,24 @@ class RawPage(BasePage, ABC):
                         if not tok:
                             continue
                         if tok.isalpha():
-                            word_cnt += 1
+                            word_cnt += 1  # 英文word计数
                             if len(tok) >= 3 and tok not in MATH_FUNC_WORDS:
-                                long_word_cnt += 1
+                                long_word_cnt += 1  # 长英文word计数
 
-                    # 3) 字体命中（作为加分项，但不再是唯一依据）
+                    # 3) 字体命中（主要逻辑）
                     font_hit = (
                             font.startswith(MATH_FONTS_PREFIX)
                             or any(h in font for h in MATH_FONT_HINTS)
                             or font in MATH_FONTS_EXACT
                     )
 
-                    # 4) 字符级数学符号命中（比仅字体更稳）
+                    # 4) 字符级数学符号命中（补充字体逻辑）
                     sym_hit_chars = sum(1 for ch in text if is_math_symbol_char(ch))
-
-                    # 5) “函数词”只算弱信号：需要配合其他特征
-                    func_hit = (text in MATH_FUNC_WORDS)
 
                     if font_hit:
                         math_like += len(text)
-
-                    # 数学符号字符直接加分（避免字体缺失时漏检）
-                    math_like += sym_hit_chars
-
-                    # 函数词弱加分（可选）
-                    if func_hit:
-                        math_like += max(1, len(text) // 2)
+                    elif sym_hit_chars:
+                        math_like += sym_hit_chars
 
             if total < min_total_chars:
                 return False
@@ -323,7 +315,7 @@ class RawPage(BasePage, ABC):
             ratio = math_like / total
 
             # 排除：自然语言特征太强（长词占比高）
-            if word_cnt > 0 and (long_word_cnt / word_cnt) > 0.5:
+            if word_cnt > 0 and (long_word_cnt / word_cnt) >= 0.3:
                 return False
 
             return ratio >= ratio_th
