@@ -10,7 +10,7 @@ from ..image.ImageSpan import ImageSpan
 from ..common.Collection import ElementCollection
 from ..common.share import TextAlignment
 from ..common import constants
-from ..common.share import is_list_item
+from ..common.share import is_list_item, is_toc_dots
 
 
 class Lines(ElementCollection):
@@ -80,10 +80,11 @@ class Lines(ElementCollection):
             end_of_sen = row[-1].text.strip().endswith(punc)
             w =  row[-1].bbox[2]-row[0].bbox[0]
 
-            if 0 and is_list_item(row[0].text[0]):
+            # split时把list item分开；目录优化
+            if is_list_item(row[0].text) or is_toc_dots(row[0].text):
                 # Treat bullet list items as separate paragraphs.
                 start_of_para = True
-            
+
             # end of a sentense and free space at the end -> end of paragraph
             elif end_of_sen and w/W <= 1.0-line_break_free_space_ratio:
                 end_of_para = True
