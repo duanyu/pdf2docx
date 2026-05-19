@@ -2,7 +2,8 @@
 *.pyc
 *.jp*g
 layout.json
-.vscode/
+.vscode
+.DS_Store
 
 # pdf testing files
 *.pdf
