@@ -393,9 +393,9 @@ class Converter:
         '''
         # make vectors of arguments for the processes
         cpu = min(kwargs['cpu_count'], cpu_count()) if kwargs['cpu_count'] else cpu_count()        
-        prefix = 'pages' # json file writing parsed pages per process
+        prefix = docx_filename.split('/')[1].split('.')[0]  # tmp/xxxx.docx # json file writing parsed pages per process
         vectors = [(i, cpu, start, end, self.filename_pdf, self.password, 
-                            kwargs, f'{prefix}-{i}.json') for i in range(cpu)]
+                            kwargs, f'/root/autodl-tmp/doc-parser/tmp/{prefix}-{i}.json') for i in range(cpu)]
 
         # start parsing processes
         pool = Pool()
@@ -403,7 +403,7 @@ class Converter:
         
         # restore parsed page data
         for i in range(cpu):
-            filename = f'{prefix}-{i}.json'
+            filename = f'/root/autodl-tmp/doc-parser/tmp/{prefix}-{i}.json'
             if not os.path.exists(filename): continue            
             self.deserialize(filename)
             os.remove(filename)

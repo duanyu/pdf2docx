@@ -473,15 +473,30 @@ class ImagesExtractor:
 
         return pix
 
+
     @staticmethod
     def _pixmap_to_cv_image(pixmap: fitz.Pixmap):
-        """Convert fitz Pixmap to opencv image.
-
-        Args:
-            pixmap (fitz.Pixmap): PyMuPDF Pixmap.
-        """
+        """Convert fitz Pixmap to opencv image."""
+    
         import cv2 as cv
         import numpy as np
+        import fitz
 
-        img_byte = pixmap.tobytes()
-        return cv.imdecode(np.frombuffer(img_byte, np.uint8), cv.IMREAD_COLOR)
+        # 转换 colorspace
+        if pixmap.colorspace is not None:
+            # 1: GRAY
+            # 3: RGB
+            if pixmap.colorspace.n not in (1, 3):
+                pixmap = fitz.Pixmap(fitz.csRGB, pixmap)
+    
+        # 去掉 alpha 通道
+        if pixmap.alpha:
+            pixmap = fitz.Pixmap(pixmap, 0)
+    
+        # 明确指定 png
+        img_byte = pixmap.tobytes("png")
+    
+        return cv.imdecode(
+            np.frombuffer(img_byte, np.uint8),
+            cv.IMREAD_COLOR
+        )
