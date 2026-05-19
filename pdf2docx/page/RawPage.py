@@ -46,6 +46,39 @@ LONG_WORD_RE = re.compile(r"^[a-z]{3,}$")
 MATH_FUNC_WORDS = {"sin", "cos", "tan", "log", "ln", "exp", "min", "max", "lim", "const"}
 
 
+def is_possible_stamp(rect):
+
+    w = rect.width
+    h = rect.height
+
+    # 基础过滤
+    if w <= 0 or h <= 0:
+        return False
+
+    # 面积
+    area = w * h
+
+    # 长宽比
+    ratio = max(w, h) / min(w, h)
+
+    # 1. 面积不能太大
+    if area > 20000:
+        return False
+
+    # 2. 面积不能太小
+    if area < 200:
+        return False
+
+    # 3. 印章通常接近正方形
+    if ratio > 2.5:
+        return False
+
+    # 4. 最大边限制
+    if max(w, h) > 180:
+        return False
+
+    return True
+
 def has_red_seal(
     image_base64: str,
     red_ratio_thresh: float = 0.005,
@@ -110,7 +143,7 @@ def has_red_seal(
 
     # ── 4. 快速剪枝：红色占比不足 → 直接返回 ──
     red_pixels = cv2.countNonZero(red_mask)
-    # print('ratio:', red_pixels / red_mask.size)
+    #  print('red pixel ratio:', red_pixels / red_mask.size)
     if red_pixels / red_mask.size < red_ratio_thresh:
         return False
 
@@ -707,14 +740,26 @@ class RawPage(BasePage, ABC):
             try:
                 # 避免报错
                 pix = self.page_engine.get_pixmap(clip=rect, dpi=200)
+
+                # 转 RGB
+                if pix.colorspace is not None:
+                    if pix.colorspace.n not in (1, 3):
+                        pix = fitz.Pixmap(fitz.csRGB, pix)
+
+                # 去 alpha
+                if pix.alpha:
+                    pix = fitz.Pixmap(pix, 0)
+
+                # 导出 png
                 img_bytes = pix.tobytes("png")
                 image_base64 = base64.b64encode(img_bytes).decode("ascii")
             except Exception as e:
                 print(e)
                 continue
 
-            if has_red_seal(image_base64, circularity_thresh=0.6):
-                # print("red seal!")
+            # 用图片大小来明显降低误判
+            if has_red_seal(image_base64, circularity_thresh=0.6) and is_possible_stamp(rect):
+                # print("red seal skipped!", merged_bbox)
                 continue
 
             new_image_block = {
