@@ -476,27 +476,29 @@ class ImagesExtractor:
 
     @staticmethod
     def _pixmap_to_cv_image(pixmap: fitz.Pixmap):
-        """Convert fitz Pixmap to opencv image."""
-    
+        import fitz
         import cv2 as cv
         import numpy as np
-        import fitz
 
-        # 转换 colorspace
-        if pixmap.colorspace is not None:
-            # 1: GRAY
-            # 3: RGB
-            if pixmap.colorspace.n not in (1, 3):
-                pixmap = fitz.Pixmap(fitz.csRGB, pixmap)
-    
-        # 去掉 alpha 通道
+        cs = pixmap.colorspace
+        if cs is None or cs not in (fitz.csGRAY, fitz.csRGB):
+            pixmap = fitz.Pixmap(fitz.csRGB, pixmap)
+
+        # 去 alpha
         if pixmap.alpha:
             pixmap = fitz.Pixmap(pixmap, 0)
     
-        # 明确指定 png
-        img_byte = pixmap.tobytes("png")
-    
-        return cv.imdecode(
-            np.frombuffer(img_byte, np.uint8),
-            cv.IMREAD_COLOR
+        # pixmap -> numpy
+        img = np.frombuffer(
+            pixmap.samples,
+            dtype=np.uint8
+        ).reshape(
+            pixmap.height,
+            pixmap.width,
+            pixmap.n
         )
+    
+        # RGB -> BGR
+        img = cv.cvtColor(img, cv.COLOR_RGB2BGR)
+    
+        return img

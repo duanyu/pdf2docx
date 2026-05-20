@@ -741,10 +741,9 @@ class RawPage(BasePage, ABC):
                 # 避免报错
                 pix = self.page_engine.get_pixmap(clip=rect, dpi=200)
 
-                # 转 RGB
-                if pix.colorspace is not None:
-                    if pix.colorspace.n not in (1, 3):
-                        pix = fitz.Pixmap(fitz.csRGB, pix)
+                cs = pix.colorspace
+                if cs is None or cs not in (fitz.csGRAY, fitz.csRGB):
+                    pix = fitz.Pixmap(fitz.csRGB, pix)
 
                 # 去 alpha
                 if pix.alpha:
