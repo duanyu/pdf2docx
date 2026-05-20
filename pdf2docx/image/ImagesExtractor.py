@@ -476,7 +476,6 @@ class ImagesExtractor:
 
     @staticmethod
     def _pixmap_to_cv_image(pixmap: fitz.Pixmap):
-        import fitz
         import cv2 as cv
         import numpy as np
 
