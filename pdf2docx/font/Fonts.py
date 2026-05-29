@@ -69,7 +69,12 @@ class Fonts(BaseCollection):
         # process xref one by one
         fonts = []
         for xref in xrefs:
-            basename, ext, _, buffer = fitz_doc.extract_font(xref)
+            try:
+                # 可能会报错
+                basename, ext, _, buffer = fitz_doc.extract_font(xref)
+            except Exception as e:
+                print("skip bad font:", xref, e)
+                continue
             if not basename: continue
 
             basename = decode(basename)
