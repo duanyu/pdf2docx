@@ -143,7 +143,7 @@ def has_red_seal(
 
     # ── 4. 快速剪枝：红色占比不足 → 直接返回 ──
     red_pixels = cv2.countNonZero(red_mask)
-    #  print('red pixel ratio:', red_pixels / red_mask.size)
+    # print('red pixel ratio:', red_pixels / red_mask.size)
     if red_pixels / red_mask.size < red_ratio_thresh:
         return False
 
@@ -630,6 +630,41 @@ class RawPage(BasePage, ABC):
         # ======== Phase 1: 合并所有相交的 image blocks ========
         image_blocks = [b for b in self.blocks if b.store().get("type") == 1]
 
+        # 对于red seal，一开始就不应该合并
+        normal_image_blocks = []
+        red_seal_blocks = []
+
+        for b in image_blocks:
+            rect = fitz.Rect(*b.bbox)
+            if is_possible_stamp(rect):
+                try:
+                    pix = self.page_engine.get_pixmap(clip=rect, dpi=200)
+            
+                    cs = pix.colorspace
+                    if cs is None or cs not in (fitz.csGRAY, fitz.csRGB):
+                        pix = fitz.Pixmap(fitz.csRGB, pix)
+            
+                    if pix.alpha:
+                        pix = fitz.Pixmap(pix, 0)
+            
+                    img_bytes = pix.tobytes("png")
+                    image_base64 = base64.b64encode(img_bytes).decode("ascii")
+            
+                except Exception:
+                    normal_image_blocks.append(b)
+                    continue
+
+                # 提前过滤 red seal
+                if has_red_seal(image_base64, circularity_thresh=0.6):
+                    red_seal_blocks.append(b)
+                else:
+                    normal_image_blocks.append(b)
+            else:
+                normal_image_blocks.append(b)
+
+        # 后续 merge 逻辑只处理 normal_image_blocks
+        image_blocks = normal_image_blocks
+
         if not image_blocks:
             # 没有image的直接不需要走后续的逻辑
             return
@@ -756,10 +791,10 @@ class RawPage(BasePage, ABC):
                 print(e)
                 continue
 
-            # 用图片大小来明显降低误判
-            if has_red_seal(image_base64, circularity_thresh=0.6) and is_possible_stamp(rect):
-                # print("red seal skipped!", merged_bbox)
-                continue
+            # # 用图片大小来明显降低误判
+            # if has_red_seal(image_base64, circularity_thresh=0.6) and is_possible_stamp(rect):
+            #     # print("red seal skipped!", merged_bbox)
+            #     continue
 
             new_image_block = {
                 "type": 1,
@@ -776,7 +811,7 @@ class RawPage(BasePage, ABC):
             for tb in group_text_members.get(root, []):
                 all_removed.add(tb)
 
-        # ======== Phase 4: 重建 blocks 列表 ========
+        # ======== Phase 4: 重建 blocks 列表，记录了应该remove，和应该加入的new ========
         if all_removed and new_blocks:
             final_blocks = Blocks(parent=self)
 
