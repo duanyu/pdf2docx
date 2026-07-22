@@ -43,6 +43,7 @@ from docx.shared import Pt
 from docx.enum.section import WD_SECTION
 from ..common.Collection import BaseCollection
 from ..common.share import debug_plot
+from ..common.constants import MAX_PAGE_PT
 from .BasePage import BasePage
 from ..layout.Sections import Sections
 from ..image.ImageBlock import ImageBlock
@@ -196,8 +197,22 @@ class Page(BasePage):
             section = doc.sections[0] # a default section is there when opening docx
 
         # page size
-        section.page_width  = Pt(self.width)
-        section.page_height = Pt(self.height)
+        width_pt = self.width
+        height_pt = self.height
+
+        # 超限则要scale
+        max_pt = max(width_pt, height_pt)
+        if max_pt > MAX_PAGE_PT:
+            width_pt = width_pt * MAX_PAGE_PT/max_pt
+            height_pt = height_pt * MAX_PAGE_PT/max_pt
+        
+        # 如果需要，可以在此处加个警告
+        if self.width > MAX_PAGE_PT or self.height > MAX_PAGE_PT:
+            import warnings
+            warnings.warn("页面尺寸超过 Word 上限 55.88 cm，已自动截断为最大值。")
+        
+        section.page_width = Pt(width_pt)
+        section.page_height = Pt(height_pt)
 
         # page margin
         left,right,top,bottom = self.margin
@@ -205,6 +220,8 @@ class Page(BasePage):
         section.right_margin = Pt(right)
         section.top_margin = Pt(top)
         section.bottom_margin = Pt(bottom)
+
+        # print('margin:', left, right, top, bottom)
 
         # create flow layout: sections
         self.sections.make_docx(doc)

@@ -28,6 +28,9 @@ HIDDEN_W_BORDER = 0.0   # do not show border
 MIN_LINE_SPACING = 0.7  # minimum line spacing available in MS word
 DEFAULT_LINE_SPACING = 1.02
 
+# 页面最大pt值（55.88cm）
+MAX_PAGE_PT = 1584
+
 # punctuation implying end of a sentense
 SENTENCE_END_PUNC = '.．。?？!！'
 SENTENCE_END_PUNC += '"”)）'

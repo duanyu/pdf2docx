@@ -276,6 +276,10 @@ class RawPage(BasePage, ABC):
         self.shapes.clean_up(
             settings['max_border_width'],
             settings['shape_min_dimension'])
+        # print('after all clean up:')
+        # print(len(self.blocks))
+        # for b in self.blocks:
+        #     print(b, b.text,)
         return self.shapes
 
     def complex_equation_to_image(self):

@@ -52,6 +52,10 @@ class Pages(BaseCollection):
             page.float_images.reset().extend(raw_page.blocks.floating_image_blocks)
             page.float_tables.reset().extend(raw_page.blocks.floating_table_blocks)
 
+            # print('page width:', page.width)
+            # print('page height:', page.height)
+            # print('page float images:', len(raw_page.blocks.floating_image_blocks))
+
             raw_pages.append(raw_page)
             pages.append(page)
 

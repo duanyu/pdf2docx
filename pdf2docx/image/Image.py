@@ -22,6 +22,7 @@ import base64
 from io import BytesIO
 from ..common import docx
 from ..common.Element import Element
+from ..common.constants import MAX_PAGE_PT
 
 import io
 # 修改点 1：使用 as 给 PIL 的 Image 起个专属别名，防止与其他库冲突
@@ -36,6 +37,11 @@ def compress_image_bytes(img_bytes, size_threshold_mb=2, max_dimension=1920, jpe
         return img_bytes
 
     try:
+        # --- 修改：设置安全像素上限，替代直接置为 None ---
+        original_max_pixels = PILImage.MAX_IMAGE_PIXELS
+        # 根据 10GB 内存设置上限，这里取 2_000_000_000 像素（约7.5G内存峰值）
+        PILImage.MAX_IMAGE_PIXELS = 2_000_000_000
+    
         # 修改点 2：使用 PILImage 代替 Image
         img = PILImage.open(io.BytesIO(img_bytes))
 
@@ -67,6 +73,10 @@ def compress_image_bytes(img_bytes, size_threshold_mb=2, max_dimension=1920, jpe
     except Exception as e:
         print(f"Warning: Image compression failed - {e}")
         return img_bytes
+        
+    finally:
+        # --- 新增：恢复原来的像素限制 ---
+        PILImage.MAX_IMAGE_PIXELS = original_max_pixels
 
 class Image(Element):
     '''Base image object.'''
@@ -142,4 +152,15 @@ class Image(Element):
             jpeg_quality=90,
         )
         # print('压缩后image大小:', len(self.image) / (1024 * 1024))
-        docx.add_image(paragraph, BytesIO(self.image), self.bbox.x1-self.bbox.x0, self.bbox.y1-self.bbox.y0)
+
+        # 对于超宽的图片，进行rescale
+        width = self.bbox.x1-max(0.0, self.bbox.x0)
+        height = self.bbox.y1-max(0.0, self.bbox.y0)
+        max_value = max(width, height)
+
+        if max_value > MAX_PAGE_PT:
+            width = width * MAX_PAGE_PT / max_value
+            height = height * MAX_PAGE_PT / max_value
+        
+        # print('image bbox:', self.bbox)
+        docx.add_image(paragraph, BytesIO(self.image), width, height)

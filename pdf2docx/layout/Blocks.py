@@ -468,6 +468,7 @@ class Blocks(ElementCollection):
         '''Identify floating image lines and convert to ImageBlock.'''
         # group lines by connectivity
         groups = self.group_by_connectivity(dx=-float_image_ignorable_gap, dy=-float_image_ignorable_gap)
+        # print('groups:', groups)
         
         # identify floating images
         if single_group_as_float:
